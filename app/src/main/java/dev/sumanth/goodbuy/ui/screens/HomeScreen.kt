@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -70,10 +71,21 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var productList by remember { mutableStateOf<List<Product>>(emptyList()) }
+    var rawProductList by remember { mutableStateOf<List<Product>>(emptyList()) }
+    var selectedStore by remember { mutableStateOf("All") }
     var isLoading by remember { mutableStateOf(false) }
     var isScrapedData by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
+
+    val stores = listOf("All", "Amazon", "Flipkart")
+
+    val filteredProductList = remember(rawProductList, selectedStore) {
+        when (selectedStore) {
+            "Amazon" -> rawProductList.filter { it.displayStore.equals("Amazon", ignoreCase = true) }
+            "Flipkart" -> rawProductList.filter { it.displayStore.equals("Flipkart", ignoreCase = true) }
+            else -> rawProductList
+        }
+    }
 
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -85,7 +97,7 @@ fun HomeScreen(
         focusManager.clearFocus()
         val term = queryTerm.trim()
         if (term.isBlank()) {
-            productList = emptyList()
+            rawProductList = emptyList()
             isScrapedData = false
             searchError = null
         } else {
@@ -97,16 +109,16 @@ fun HomeScreen(
                 result.onSuccess { items ->
                     val distinctItems = items.distinctBy { it.id }
                     if (distinctItems.isNotEmpty()) {
-                        productList = distinctItems
+                        rawProductList = distinctItems
                         isScrapedData = true
                         snackbarHostState.showSnackbar("Found ${distinctItems.size} live results from Flipkart & Amazon")
                     } else {
-                        productList = emptyList()
+                        rawProductList = emptyList()
                         searchError = "No products found for '$term'"
                         snackbarHostState.showSnackbar("No live results found for '$term'")
                     }
                 }.onFailure { err ->
-                    productList = emptyList()
+                    rawProductList = emptyList()
                     searchError = "Search error: ${err.localizedMessage ?: "Failed to connect"}"
                     snackbarHostState.showSnackbar("Error fetching search results")
                 }
@@ -177,7 +189,8 @@ fun HomeScreen(
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = {
                                 searchQuery = ""
-                                productList = emptyList()
+                                rawProductList = emptyList()
+                                selectedStore = "All"
                                 isScrapedData = false
                                 searchError = null
                             }) {
@@ -213,6 +226,23 @@ fun HomeScreen(
                 }
             }
 
+            // Store Filter Chips Row (Under Search Bar)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                stores.forEach { store ->
+                    FilterChip(
+                        selected = selectedStore == store,
+                        onClick = { selectedStore = store },
+                        label = { Text(store) }
+                    )
+                }
+            }
+
             // Loading Progress Bar
             AnimatedVisibility(visible = isLoading) {
                 Column(
@@ -234,8 +264,8 @@ fun HomeScreen(
                 }
             }
 
-            // Results Header Info Bar (Only shown when products are loaded)
-            if (productList.isNotEmpty()) {
+            // Results Header Info Bar (Only shown when rawProductList is loaded)
+            if (rawProductList.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -245,7 +275,7 @@ fun HomeScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${productList.size} Products found",
+                            text = "${filteredProductList.size} of ${rawProductList.size} Products",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Medium
@@ -282,7 +312,8 @@ fun HomeScreen(
                     TextButton(
                         onClick = {
                             searchQuery = ""
-                            productList = emptyList()
+                            rawProductList = emptyList()
+                            selectedStore = "All"
                             isScrapedData = false
                             searchError = null
                         }
@@ -296,7 +327,7 @@ fun HomeScreen(
             }
 
             // Product Grid or Search Prompt / Empty State
-            if (productList.isEmpty() && !isLoading) {
+            if (rawProductList.isEmpty() && !isLoading) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -330,6 +361,20 @@ fun HomeScreen(
                         )
                     }
                 }
+            } else if (filteredProductList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No products found for store '$selectedStore'",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -339,7 +384,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(
-                        items = productList,
+                        items = filteredProductList,
                         key = { it.id }
                     ) { product ->
                         ProductCard(
@@ -361,7 +406,7 @@ fun HomeScreen(
                                 }
                             },
                             onFavoriteClick = { favProduct ->
-                                productList = productList.map {
+                                rawProductList = rawProductList.map {
                                     if (it.id == favProduct.id) it.copy(isFavorite = !it.isFavorite)
                                     else it
                                 }

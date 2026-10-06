@@ -21,7 +21,8 @@ object ProductRepository {
             newPrice = 199.99,
             rating = 4.8,
             reviewCount = 342,
-            isFavorite = true
+            isFavorite = true,
+            link = "https://www.amazon.in/dp/B07XYZ1"
         ),
         Product(
             id = "2",
@@ -32,7 +33,8 @@ object ProductRepository {
             oldPrice = 180.00,
             newPrice = 129.50,
             rating = 4.6,
-            reviewCount = 189
+            reviewCount = 189,
+            link = "https://www.flipkart.com/classic-leather-watch/p/itm123"
         ),
         Product(
             id = "3",
@@ -44,7 +46,8 @@ object ProductRepository {
             newPrice = 89.99,
             rating = 4.9,
             reviewCount = 512,
-            isFavorite = true
+            isFavorite = true,
+            link = "https://www.amazon.in/dp/B08ABC2"
         ),
         Product(
             id = "4",
@@ -55,7 +58,8 @@ object ProductRepository {
             oldPrice = 24.99,
             newPrice = 14.99,
             rating = 4.5,
-            reviewCount = 94
+            reviewCount = 94,
+            link = "https://www.flipkart.com/ceramic-mug/p/itm456"
         ),
         Product(
             id = "5",
@@ -66,7 +70,8 @@ object ProductRepository {
             oldPrice = 99.00,
             newPrice = 59.99,
             rating = 4.4,
-            reviewCount = 276
+            reviewCount = 276,
+            link = "https://www.amazon.in/dp/B09DEF3"
         ),
         Product(
             id = "6",
@@ -77,7 +82,8 @@ object ProductRepository {
             oldPrice = 110.00,
             newPrice = 74.99,
             rating = 4.7,
-            reviewCount = 142
+            reviewCount = 142,
+            link = "https://www.flipkart.com/denim-jacket/p/itm789"
         ),
         Product(
             id = "7",
@@ -88,7 +94,8 @@ object ProductRepository {
             oldPrice = 79.99,
             newPrice = 49.99,
             rating = 4.7,
-            reviewCount = 420
+            reviewCount = 420,
+            link = "https://www.amazon.in/dp/B07GHI4"
         ),
         Product(
             id = "8",
@@ -99,7 +106,8 @@ object ProductRepository {
             oldPrice = 65.00,
             newPrice = 39.99,
             rating = 4.3,
-            reviewCount = 88
+            reviewCount = 88,
+            link = "https://www.flipkart.com/sunglasses/p/itm999"
         )
     )
 

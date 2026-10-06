@@ -89,6 +89,23 @@ fun ProductCard(
                     }
                 }
 
+                // Store Badge (Bottom Left)
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = RoundedCornerShape(topEnd = 12.dp, bottomStart = 16.dp),
+                    modifier = Modifier.align(Alignment.BottomStart)
+                ) {
+                    Text(
+                        text = product.displayStore,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
                 // Favorite Toggle Button (Top Right)
                 IconButton(
                     onClick = { onFavoriteClick(product) },

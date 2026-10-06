@@ -19,4 +19,13 @@ data class Product(
         } else {
             0
         }
+
+    val displayStore: String
+        get() = when {
+            link.contains("amazon", ignoreCase = true) -> "Amazon"
+            link.contains("flipkart", ignoreCase = true) -> "Flipkart"
+            id.startsWith("amazon", ignoreCase = true) -> "Amazon"
+            id.startsWith("flipkart", ignoreCase = true) -> "Flipkart"
+            else -> "Amazon"
+        }
 }
