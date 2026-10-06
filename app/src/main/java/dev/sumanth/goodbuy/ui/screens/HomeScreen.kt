@@ -80,8 +80,8 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Helper to perform live Flipkart scraping
-    val performFlipkartSearch: (String) -> Unit = { queryTerm ->
+    // Helper to perform live Flipkart and Amazon scraping
+    val performSearch: (String) -> Unit = { queryTerm ->
         focusManager.clearFocus()
         val term = queryTerm.trim()
         if (term.isBlank()) {
@@ -92,23 +92,23 @@ fun HomeScreen(
             isLoading = true
             searchError = null
             scope.launch {
-                val result = ProductRepository.searchFlipkart(term)
+                val result = ProductRepository.searchAll(term)
                 isLoading = false
                 result.onSuccess { items ->
                     val distinctItems = items.distinctBy { it.id }
                     if (distinctItems.isNotEmpty()) {
                         productList = distinctItems
                         isScrapedData = true
-                        snackbarHostState.showSnackbar("Found ${distinctItems.size} live results from Flipkart")
+                        snackbarHostState.showSnackbar("Found ${distinctItems.size} live results from Flipkart & Amazon")
                     } else {
                         productList = emptyList()
-                        searchError = "No products found on Flipkart for '$term'"
+                        searchError = "No products found for '$term'"
                         snackbarHostState.showSnackbar("No live results found for '$term'")
                     }
                 }.onFailure { err ->
                     productList = emptyList()
-                    searchError = "Flipkart search error: ${err.localizedMessage ?: "Failed to connect"}"
-                    snackbarHostState.showSnackbar("Error fetching Flipkart results")
+                    searchError = "Search error: ${err.localizedMessage ?: "Failed to connect"}"
+                    snackbarHostState.showSnackbar("Error fetching search results")
                 }
             }
         }
@@ -163,7 +163,7 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     placeholder = {
                         Text(
-                            text = "Search Flipkart products...",
+                            text = "Search Flipkart & Amazon products...",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     },
@@ -191,7 +191,7 @@ fun HomeScreen(
                     singleLine = true,
                     shape = RoundedCornerShape(28.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { performFlipkartSearch(searchQuery) }),
+                    keyboardActions = KeyboardActions(onSearch = { performSearch(searchQuery) }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline
@@ -202,13 +202,13 @@ fun HomeScreen(
 
                 // Search Icon Button next to search bar
                 FilledIconButton(
-                    onClick = { performFlipkartSearch(searchQuery) },
+                    onClick = { performSearch(searchQuery) },
                     modifier = Modifier.size(52.dp),
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = "Search Flipkart"
+                        contentDescription = "Search Flipkart & Amazon"
                     )
                 }
             }
@@ -227,7 +227,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Scraping live products from Flipkart...",
+                        text = "Scraping live products from Flipkart & Amazon...",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -263,13 +263,13 @@ fun HomeScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.CloudDownload,
-                                        contentDescription = "Flipkart Live",
+                                        contentDescription = "Flipkart & Amazon Live",
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Flipkart Live",
+                                        text = "Flipkart & Amazon Live",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         fontWeight = FontWeight.Bold
@@ -309,7 +309,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             imageVector = if (searchError != null) Icons.Default.SearchOff else Icons.Default.Search,
-                            contentDescription = "Search Flipkart",
+                            contentDescription = "Search Products",
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                         )
@@ -323,7 +323,7 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = searchError
-                                ?: "Enter product name above (e.g. 'laptop', 'wireless headphones', 'shoes') to scrape live results from Flipkart.",
+                                ?: "Enter product name above (e.g. 'laptop', 'wireless headphones', 'shoes') to scrape live results from Flipkart & Amazon.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
