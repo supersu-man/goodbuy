@@ -24,9 +24,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -45,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +65,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.sumanth.goodbuy.model.Product
 import dev.sumanth.goodbuy.repository.ProductRepository
+import dev.sumanth.goodbuy.repository.TrackingRepository
 import dev.sumanth.goodbuy.ui.components.ProductCard
 import dev.sumanth.goodbuy.ui.theme.AppTheme
 import kotlinx.coroutines.launch
@@ -69,6 +74,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
+    onNavigateToTracking: () -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var rawProductList by remember { mutableStateOf<List<Product>>(emptyList()) }
@@ -76,6 +82,8 @@ fun HomeScreen(
     var isLoading by remember { mutableStateOf(false) }
     var isScrapedData by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
+
+    val trackedProducts by TrackingRepository.trackedProducts.collectAsState()
 
     val stores = listOf("All", "Amazon", "Flipkart")
 
@@ -149,6 +157,28 @@ fun HomeScreen(
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onNavigateToTracking,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (trackedProducts.isNotEmpty()) {
+                                    Badge {
+                                        Text("${trackedProducts.size}")
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "Tracking page",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -387,37 +417,38 @@ fun HomeScreen(
                         items = filteredProductList,
                         key = { it.id }
                     ) { product ->
+                        val isTracked = trackedProducts.any { it.id == product.id }
+
                         ProductCard(
                             product = product,
+                            isTracked = isTracked,
                             onProductClick = { clickedProduct ->
                                 if (clickedProduct.link.isNotBlank()) {
                                     try {
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(clickedProduct.link))
                                         context.startActivity(intent)
-                                    } catch (e: Exception) {
+                                    } catch (_: Exception) {
                                         scope.launch {
-                                            snackbarHostState.showSnackbar("Clicked on ${clickedProduct.title}")
+                                            snackbarHostState.showSnackbar(clickedProduct.title)
                                         }
                                     }
                                 } else {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Clicked on ${clickedProduct.title}")
+                                        snackbarHostState.showSnackbar(clickedProduct.title)
                                     }
                                 }
                             },
-                            onFavoriteClick = { favProduct ->
-                                rawProductList = rawProductList.map {
-                                    if (it.id == favProduct.id) it.copy(isFavorite = !it.isFavorite)
-                                    else it
-                                }
-                                scope.launch {
-                                    val msg = if (!favProduct.isFavorite) "Added to wishlist" else "Removed from wishlist"
-                                    snackbarHostState.showSnackbar("${favProduct.title} - $msg")
-                                }
-                            },
-                            onAddToCartClick = { cartProduct ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("${cartProduct.title} added to cart!")
+                            onTrackClick = { productToTrack ->
+                                if (isTracked) {
+                                    TrackingRepository.removeTrackedProduct(productToTrack.id)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Removed from price tracking")
+                                    }
+                                } else {
+                                    TrackingRepository.addTrackedProduct(productToTrack)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Added '${productToTrack.title}' to price tracking!")
+                                    }
                                 }
                             }
                         )

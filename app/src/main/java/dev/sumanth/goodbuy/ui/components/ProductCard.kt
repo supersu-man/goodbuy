@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddShoppingCart
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.AddAlert
+import androidx.compose.material.icons.filled.BookmarkAdded
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -46,9 +43,9 @@ import java.util.Locale
 fun ProductCard(
     product: Product,
     modifier: Modifier = Modifier,
+    isTracked: Boolean = false,
     onProductClick: (Product) -> Unit = {},
-    onFavoriteClick: (Product) -> Unit = {},
-    onAddToCartClick: (Product) -> Unit = {},
+    onTrackClick: (Product) -> Unit = {},
 ) {
     ElevatedCard(
         onClick = { onProductClick(product) },
@@ -56,7 +53,7 @@ fun ProductCard(
         modifier = modifier.fillMaxWidth()
     ) {
         Column {
-            // Image with Overlays (Discount Badge & Favorite Button)
+            // Image with Overlays (Discount Badge & Track Status Badge)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,22 +103,29 @@ fun ProductCard(
                     )
                 }
 
-                // Favorite Toggle Button (Top Right)
-                IconButton(
-                    onClick = { onFavoriteClick(product) },
+                // Track Toggle Button (Top Right)
+                FilledIconButton(
+                    onClick = { onTrackClick(product) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
-                        .size(32.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                            shape = CircleShape
+                        .size(34.dp),
+                    shape = CircleShape,
+                    colors = if (isTracked) {
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         )
+                    } else {
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 ) {
                     Icon(
-                        imageVector = if (product.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (product.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface,
+                        imageVector = if (isTracked) Icons.Default.BookmarkAdded else Icons.Default.AddAlert,
+                        contentDescription = if (isTracked) "Tracked" else "Add to Tracking",
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -167,7 +171,7 @@ fun ProductCard(
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = "Rating",
-                        tint = Color(0xFFFFB800),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
@@ -186,7 +190,7 @@ fun ProductCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Price Section and Add to Cart Button
+                // Price Section and Track Button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -214,21 +218,31 @@ fun ProductCard(
                         }
                     }
 
-                    // Add to Cart Button
-                    FilledIconButton(
-                        onClick = { onAddToCartClick(product) },
-                        modifier = Modifier.size(36.dp),
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    // Bottom Track Button
+                    Surface(
+                        onClick = { onTrackClick(product) },
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isTracked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AddShoppingCart,
-                            contentDescription = "Add to Cart",
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isTracked) Icons.Default.BookmarkAdded else Icons.Default.AddAlert,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (isTracked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isTracked) "Tracked" else "Track",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = if (isTracked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
                     }
                 }
             }
@@ -236,7 +250,7 @@ fun ProductCard(
     }
 }
 
-private fun formatPrice(price: Double, link: String): String {
+fun formatPrice(price: Double, link: String = ""): String {
     val isINR = link.contains("flipkart", ignoreCase = true) || price >= 50.0 || (price % 1.0 == 0.0)
     val symbol = if (isINR) "₹" else "$"
     return if (price % 1.0 == 0.0) {
