@@ -17,12 +17,16 @@ object TrackingRepository {
     private const val PREFS_NAME = "goodbuy_tracking_prefs"
     private const val KEY_PRODUCTS = "tracked_products"
     private const val KEY_GROUPS = "tracked_groups"
+    private const val KEY_LAST_REFRESHED_TIME = "last_refreshed_time"
 
     private val _trackedProducts = MutableStateFlow<List<Product>>(emptyList())
     val trackedProducts: StateFlow<List<Product>> = _trackedProducts.asStateFlow()
 
     private val _trackedGroups = MutableStateFlow<List<TrackedGroup>>(emptyList())
     val trackedGroups: StateFlow<List<TrackedGroup>> = _trackedGroups.asStateFlow()
+
+    private val _lastRefreshedTime = MutableStateFlow<Long>(0L)
+    val lastRefreshedTime: StateFlow<Long> = _lastRefreshedTime.asStateFlow()
 
     private var prefs: SharedPreferences? = null
 
@@ -43,44 +47,83 @@ object TrackingRepository {
         saveToPrefs()
     }
 
+    suspend fun checkAndRefreshTrackedPrices(
+        minIntervalMillis: Long = 30 * 60 * 1000L,
+        force: Boolean = false
+    ): Int {
+        val currentTracked = _trackedProducts.value
+        if (currentTracked.isEmpty()) return 0
+
+        val currentTime = System.currentTimeMillis()
+        val lastRefreshed = _lastRefreshedTime.value
+        val oldestTracked = currentTracked.minOfOrNull { it.lastTrackedTime } ?: 0L
+
+        val isStale = force || (lastRefreshed == 0L) ||
+                (currentTime - lastRefreshed >= minIntervalMillis) ||
+                (currentTime - oldestTracked >= minIntervalMillis)
+
+        if (isStale) {
+            return refreshTrackedPrices()
+        }
+        return 0
+    }
+
     suspend fun refreshTrackedPrices(): Int = withContext(Dispatchers.IO) {
         val currentTracked = _trackedProducts.value
         if (currentTracked.isEmpty()) return@withContext 0
 
         var updatedCount = 0
         val updatedProducts = currentTracked.toMutableList()
+        val currentTime = System.currentTimeMillis()
 
         for (i in updatedProducts.indices) {
             val product = updatedProducts[i]
             val queryTerm = product.title.take(30)
-            val searchResult = ProductRepository.searchAll(queryTerm)
-            searchResult.onSuccess { liveProducts ->
-                val match = liveProducts.find { it.id == product.id || (it.link.isNotBlank() && it.link == product.link) }
-                    ?: liveProducts.firstOrNull { it.displayStore == product.displayStore }
+            try {
+                val searchResult = ProductRepository.searchAll(queryTerm)
+                var productUpdated = false
+                searchResult.onSuccess { liveProducts ->
+                    val match = liveProducts.find { it.id == product.id || (it.link.isNotBlank() && it.link == product.link) }
+                        ?: liveProducts.firstOrNull { it.displayStore == product.displayStore }
 
-                if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
-                    updatedProducts[i] = product.copy(
-                        oldPrice = product.newPrice,
-                        newPrice = match.newPrice,
-                        rating = if (match.rating > 0) match.rating else product.rating
-                    )
-                    updatedCount++
+                    if (match != null && match.newPrice > 0.0) {
+                        if (match.newPrice != product.newPrice) {
+                            updatedProducts[i] = product.copy(
+                                oldPrice = product.newPrice,
+                                newPrice = match.newPrice,
+                                rating = if (match.rating > 0) match.rating else product.rating,
+                                lastTrackedTime = currentTime
+                            )
+                            updatedCount++
+                            productUpdated = true
+                        }
+                    }
                 }
+                if (!productUpdated) {
+                    updatedProducts[i] = updatedProducts[i].copy(lastTrackedTime = currentTime)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                updatedProducts[i] = updatedProducts[i].copy(lastTrackedTime = currentTime)
             }
         }
 
-        if (updatedCount > 0) {
-            _trackedProducts.value = updatedProducts
-            saveToPrefs()
-        }
+        _trackedProducts.value = updatedProducts
+        _lastRefreshedTime.value = currentTime
+        saveToPrefs()
         return@withContext updatedCount
     }
 
     fun addTrackedProduct(product: Product) {
         val current = _trackedProducts.value.toMutableList()
         if (current.none { it.id == product.id }) {
-            current.add(0, product)
+            val now = System.currentTimeMillis()
+            val trackedProduct = product.copy(lastTrackedTime = now)
+            current.add(0, trackedProduct)
             _trackedProducts.value = current
+            if (_lastRefreshedTime.value == 0L) {
+                _lastRefreshedTime.value = now
+            }
             saveToPrefs()
         }
     }
@@ -186,6 +229,7 @@ object TrackingRepository {
 
     private fun loadFromPrefs() {
         val p = prefs ?: return
+        _lastRefreshedTime.value = p.getLong(KEY_LAST_REFRESHED_TIME, 0L)
         val productsJson = p.getString(KEY_PRODUCTS, null)
         val groupsJson = p.getString(KEY_GROUPS, null)
 
@@ -207,7 +251,8 @@ object TrackingRepository {
                             rating = obj.optDouble("rating", 0.0),
                             reviewCount = obj.optInt("reviewCount", 0),
                             isFavorite = obj.optBoolean("isFavorite", false),
-                            link = obj.optString("link")
+                            link = obj.optString("link"),
+                            lastTrackedTime = obj.optLong("lastTrackedTime", System.currentTimeMillis())
                         )
                     )
                 }
@@ -262,6 +307,7 @@ object TrackingRepository {
                     put("reviewCount", product.reviewCount)
                     put("isFavorite", product.isFavorite)
                     put("link", product.link)
+                    put("lastTrackedTime", product.lastTrackedTime)
                 }
                 productsArray.put(obj)
             }
@@ -279,6 +325,7 @@ object TrackingRepository {
             p.edit()
                 .putString(KEY_PRODUCTS, productsArray.toString())
                 .putString(KEY_GROUPS, groupsArray.toString())
+                .putLong(KEY_LAST_REFRESHED_TIME, _lastRefreshedTime.value)
                 .apply()
         } catch (e: Exception) {
             e.printStackTrace()

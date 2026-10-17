@@ -259,3 +259,22 @@ fun formatPrice(price: Double, link: String = ""): String {
         "$symbol${String.format(Locale.US, "%,.2f", price)}"
     }
 }
+
+fun formatRelativeTime(timestamp: Long): String {
+    if (timestamp <= 0L) return "Just now"
+    val diff = System.currentTimeMillis() - timestamp
+    if (diff < 0) return "Just now"
+
+    val seconds = diff / 1000
+    val minutes = seconds / 60
+    val hours = minutes / 60
+    val days = hours / 24
+
+    return when {
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        else -> "${days}d ago"
+    }
+}
+

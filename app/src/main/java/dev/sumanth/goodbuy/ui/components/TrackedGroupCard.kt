@@ -59,6 +59,7 @@ fun TrackedGroupCard(
     val primaryProduct = groupedProducts.firstOrNull()
     val leastPrice = bestProduct?.newPrice ?: 0.0
     val bestStore = bestProduct?.displayStore ?: ""
+    val latestTrackedTime = groupedProducts.maxOfOrNull { it.lastTrackedTime } ?: 0L
 
     val storesIncluded = groupedProducts.map { it.displayStore }.distinct().joinToString(" & ")
 
@@ -217,24 +218,38 @@ fun TrackedGroupCard(
                         modifier = Modifier.padding(8.dp)
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.LocalOffer,
-                                contentDescription = "Best Deal",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "LEAST CURRENT PRICE",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalOffer,
+                                    contentDescription = "Best Deal",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "LEAST CURRENT PRICE",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        letterSpacing = 0.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            if (latestTrackedTime > 0L) {
+                                Text(
+                                    text = formatRelativeTime(latestTrackedTime),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(2.dp))

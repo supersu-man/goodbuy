@@ -22,20 +22,14 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,16 +37,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,167 +66,76 @@ import dev.sumanth.goodbuy.repository.TrackingRepository
 import dev.sumanth.goodbuy.ui.components.TrackedGroupCard
 import dev.sumanth.goodbuy.ui.components.TrackedProductCard
 import dev.sumanth.goodbuy.ui.components.formatPrice
+import dev.sumanth.goodbuy.ui.components.formatRelativeTime
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackingScreen(
     modifier: Modifier = Modifier,
+    isSelectionMode: Boolean = false,
+    selectedProductIds: Set<String> = emptySet(),
+    selectedGroupIds: Set<String> = emptySet(),
+    onSelectionModeChange: (Boolean) -> Unit = {},
+    onSelectedProductIdsChange: (Set<String>) -> Unit = {},
+    onSelectedGroupIdsChange: (Set<String>) -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onNavigateToSearch: () -> Unit = {}
 ) {
     val trackedProducts by TrackingRepository.trackedProducts.collectAsState()
     val trackedGroups by TrackingRepository.trackedGroups.collectAsState()
-
-    var isSelectionMode by remember { mutableStateOf(false) }
-    var selectedProductIds by remember { mutableStateOf(setOf<String>()) }
-    var selectedGroupIds by remember { mutableStateOf(setOf<String>()) }
+    val lastRefreshedTime by TrackingRepository.lastRefreshedTime.collectAsState()
 
     var selectedGroupForDetails by remember { mutableStateOf<TrackedGroup?>(null) }
-    var showClearAllDialog by remember { mutableStateOf(false) }
     var isRefreshingPrices by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Auto-refetch when screen is opened and periodically if last tracked time was 30+ min ago
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            if (!isRefreshingPrices) {
+                val updatedCount = TrackingRepository.checkAndRefreshTrackedPrices(minIntervalMillis = 30 * 60 * 1000L)
+                if (updatedCount > 0) {
+                    snackbarHostState.showSnackbar("Updated prices for $updatedCount products!")
+                }
+            }
+            delay(60_000L) // Check every 60 seconds
+        }
+    }
 
     val ungroupedProducts = remember(trackedProducts, trackedGroups) {
         val groupedIds = trackedGroups.flatMap { it.productIds }.toSet()
         trackedProducts.filterNot { it.id in groupedIds }
     }
 
-    val totalSelectedCount = selectedProductIds.size + selectedGroupIds.size
-
-    val exitSelectionMode = {
-        isSelectionMode = false
-        selectedProductIds = emptySet()
-        selectedGroupIds = emptySet()
-    }
-
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            if (isSelectionMode) {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            text = "$totalSelectedCount Selected to Group",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { exitSelectionMode() }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Cancel selection"
-                            )
-                        }
-                    },
-                    actions = {
-                        Button(
-                            onClick = {
-                                if (totalSelectedCount >= 2) {
-                                    val newGroup = TrackingRepository.groupProducts(
-                                        selectedProductIds.toList(),
-                                        selectedGroupIds.toList()
-                                    )
-                                    exitSelectionMode()
-                                    if (newGroup != null) {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Products grouped together successfully!")
-                                        }
-                                    }
-                                } else {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Select at least 2 items to group them")
-                                    }
-                                }
-                            },
-                            enabled = totalSelectedCount >= 2,
-                            modifier = Modifier.padding(end = 8.dp),
-                            shape = RoundedCornerShape(20.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Layers,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Group")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                )
-            } else {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.NotificationsActive,
-                                contentDescription = "Price Tracking",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(26.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Price Tracker",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    },
-                    actions = {
-                        if (trackedProducts.isNotEmpty() || trackedGroups.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    showClearAllDialog = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DeleteOutline,
-                                    contentDescription = "Clear all tracked items",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        }
-    ) { innerPadding ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshingPrices,
-            onRefresh = {
-                if (!isRefreshingPrices) {
-                    isRefreshingPrices = true
-                    scope.launch {
-                        val updatedCount = TrackingRepository.refreshTrackedPrices()
-                        isRefreshingPrices = false
-                        if (updatedCount > 0) {
-                            snackbarHostState.showSnackbar("Updated prices for $updatedCount products!")
-                        } else {
-                            snackbarHostState.showSnackbar("All tracked prices are up to date.")
-                        }
+    PullToRefreshBox(
+        isRefreshing = isRefreshingPrices,
+        onRefresh = {
+            if (!isRefreshingPrices) {
+                isRefreshingPrices = true
+                scope.launch {
+                    val updatedCount = TrackingRepository.refreshTrackedPrices()
+                    isRefreshingPrices = false
+                    if (updatedCount > 0) {
+                        snackbarHostState.showSnackbar("Updated prices for $updatedCount products!")
+                    } else {
+                        snackbarHostState.showSnackbar("All tracked prices are up to date.")
                     }
                 }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            }
+        },
+        modifier = modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-            // Top Helper Hint Bar (When products exist & not selecting)
-            if (!isSelectionMode && (ungroupedProducts.isNotEmpty() || trackedGroups.isNotEmpty())) {
+            // Top Helper Hint Bar - Always visible when items exist (even during selection mode)
+            if (ungroupedProducts.isNotEmpty() || trackedGroups.isNotEmpty()) {
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                     modifier = Modifier
@@ -254,11 +154,28 @@ fun TrackingScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Hold (long-press) products to select and group identical items to track least price.",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isSelectionMode) {
+                                    "Select 2 or more products to group them together and track the lowest price."
+                                } else {
+                                    "Hold (long-press) products to select and group identical items."
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            if (!isSelectionMode && lastRefreshedTime > 0L) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Last checked: ${formatRelativeTime(lastRefreshedTime)} • Auto-refreshes if >30m old",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -334,25 +251,19 @@ fun TrackingScreen(
                             isSelected = isSelected,
                             onClick = { clickedGroup ->
                                 if (isSelectionMode) {
-                                    selectedGroupIds = if (isSelected) {
-                                        selectedGroupIds - clickedGroup.id
-                                    } else {
-                                        selectedGroupIds + clickedGroup.id
-                                    }
+                                    val updated = if (isSelected) selectedGroupIds - clickedGroup.id else selectedGroupIds + clickedGroup.id
+                                    onSelectedGroupIdsChange(updated)
                                 } else {
                                     selectedGroupForDetails = clickedGroup
                                 }
                             },
                             onLongClick = { clickedGroup ->
                                 if (!isSelectionMode) {
-                                    isSelectionMode = true
-                                    selectedGroupIds = setOf(clickedGroup.id)
+                                    onSelectionModeChange(true)
+                                    onSelectedGroupIdsChange(setOf(clickedGroup.id))
                                 } else {
-                                    selectedGroupIds = if (isSelected) {
-                                        selectedGroupIds - clickedGroup.id
-                                    } else {
-                                        selectedGroupIds + clickedGroup.id
-                                    }
+                                    val updated = if (isSelected) selectedGroupIds - clickedGroup.id else selectedGroupIds + clickedGroup.id
+                                    onSelectedGroupIdsChange(updated)
                                 }
                             },
                             onUngroupClick = { groupToUngroup ->
@@ -377,11 +288,8 @@ fun TrackingScreen(
                             isSelected = isSelected,
                             onClick = { clickedProduct ->
                                 if (isSelectionMode) {
-                                    selectedProductIds = if (isSelected) {
-                                        selectedProductIds - clickedProduct.id
-                                    } else {
-                                        selectedProductIds + clickedProduct.id
-                                    }
+                                    val updated = if (isSelected) selectedProductIds - clickedProduct.id else selectedProductIds + clickedProduct.id
+                                    onSelectedProductIdsChange(updated)
                                 } else {
                                     if (clickedProduct.link.isNotBlank()) {
                                         try {
@@ -397,14 +305,11 @@ fun TrackingScreen(
                             },
                             onLongClick = { clickedProduct ->
                                 if (!isSelectionMode) {
-                                    isSelectionMode = true
-                                    selectedProductIds = setOf(clickedProduct.id)
+                                    onSelectionModeChange(true)
+                                    onSelectedProductIdsChange(setOf(clickedProduct.id))
                                 } else {
-                                    selectedProductIds = if (isSelected) {
-                                        selectedProductIds - clickedProduct.id
-                                    } else {
-                                        selectedProductIds + clickedProduct.id
-                                    }
+                                    val updated = if (isSelected) selectedProductIds - clickedProduct.id else selectedProductIds + clickedProduct.id
+                                    onSelectedProductIdsChange(updated)
                                 }
                             },
                             onRemoveClick = { productToRemove ->
@@ -417,7 +322,6 @@ fun TrackingScreen(
                     }
                 }
             }
-        }
         }
 
         // Group Details Bottom Sheet
@@ -582,7 +486,7 @@ fun TrackingScreen(
                                                 shape = RoundedCornerShape(6.dp)
                                             ) {
                                                 Text(
-                                                    text = item.displayStore,
+                                                    text = "${item.displayStore} • ${formatRelativeTime(item.lastTrackedTime)}",
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                 )
@@ -679,47 +583,6 @@ fun TrackingScreen(
                     }
                 }
             }
-        }
-
-        // Clear All Confirmation Dialog
-        if (showClearAllDialog) {
-            AlertDialog(
-                onDismissRequest = { showClearAllDialog = false },
-                title = {
-                    Text(
-                        text = "Clear All Tracked Products?",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Are you sure you want to remove all products and groups from price tracking? This action cannot be undone.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showClearAllDialog = false
-                            TrackingRepository.clearAll()
-                            scope.launch {
-                                snackbarHostState.showSnackbar("All tracked items cleared")
-                            }
-                        }
-                    ) {
-                        Text(
-                            text = "Clear All",
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showClearAllDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
-            )
         }
     }
 }

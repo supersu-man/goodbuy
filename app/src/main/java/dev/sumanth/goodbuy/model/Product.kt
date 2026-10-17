@@ -12,6 +12,7 @@ data class Product(
     val reviewCount: Int,
     val isFavorite: Boolean = false,
     val link: String = "",
+    val lastTrackedTime: Long = System.currentTimeMillis(),
 ) {
     val discountPercentage: Int
         get() = if ((oldPrice > newPrice) && (oldPrice > 0)) {

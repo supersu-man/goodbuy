@@ -24,14 +24,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -40,13 +34,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -61,20 +52,17 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.sumanth.goodbuy.model.Product
 import dev.sumanth.goodbuy.repository.ProductRepository
 import dev.sumanth.goodbuy.repository.TrackingRepository
 import dev.sumanth.goodbuy.ui.components.ProductCard
-import dev.sumanth.goodbuy.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    onNavigateToTracking: () -> Unit = {}
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var rawProductList by remember { mutableStateOf<List<Product>>(emptyList()) }
@@ -97,7 +85,6 @@ fun HomeScreen(
 
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
-    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     // Helper to perform live Flipkart and Amazon scraping
@@ -134,335 +121,271 @@ fun HomeScreen(
         }
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingBag,
-                            contentDescription = "GoodBuy Logo",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "GoodBuy",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = onNavigateToTracking,
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                if (trackedProducts.isNotEmpty()) {
-                                    Badge {
-                                        Text("${trackedProducts.size}")
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.NotificationsActive,
-                                contentDescription = "Tracking page",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
+    Column(
+        modifier = modifier.fillMaxSize()
+    ) {
+        // Search Bar & Search Button on Top
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Search Bar & Search Button on Top
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = {
-                        Text(
-                            text = "Search Flipkart & Amazon products...",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search Icon"
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = {
-                                searchQuery = ""
-                                rawProductList = emptyList()
-                                selectedStore = "All"
-                                isScrapedData = false
-                                searchError = null
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear search"
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(28.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { performSearch(searchQuery) }),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.weight(1f),
+                placeholder = {
+                    Text(
+                        text = "Search Flipkart & Amazon...",
+                        style = MaterialTheme.typography.bodyMedium
                     )
-                )
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                // Search Icon Button next to search bar
-                FilledIconButton(
-                    onClick = { performSearch(searchQuery) },
-                    modifier = Modifier.size(52.dp),
-                    shape = RoundedCornerShape(26.dp)
-                ) {
+                },
+                leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = "Search Flipkart & Amazon"
+                        contentDescription = "Search Icon"
                     )
-                }
-            }
-
-            // Store Filter Chips Row (Under Search Bar)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                stores.forEach { store ->
-                    FilterChip(
-                        selected = selectedStore == store,
-                        onClick = { selectedStore = store },
-                        label = { Text(store) }
-                    )
-                }
-            }
-
-            // Loading Progress Bar
-            AnimatedVisibility(visible = isLoading) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Scraping live products from Flipkart & Amazon...",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            // Results Header Info Bar (Only shown when rawProductList is loaded)
-            if (rawProductList.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "${filteredProductList.size} of ${rawProductList.size} Products",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        if (isScrapedData) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CloudDownload,
-                                        contentDescription = "Flipkart & Amazon Live",
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Flipkart & Amazon Live",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    TextButton(
-                        onClick = {
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = {
                             searchQuery = ""
                             rawProductList = emptyList()
                             selectedStore = "All"
                             isScrapedData = false
                             searchError = null
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear search"
+                            )
                         }
-                    ) {
-                        Text(
-                            text = "Clear Results",
-                            style = MaterialTheme.typography.bodySmall
-                        )
                     }
-                }
-            }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(28.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { performSearch(searchQuery) }),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
+            )
 
-            // Product Grid or Search Prompt / Empty State
-            if (rawProductList.isEmpty() && !isLoading) {
-                Box(
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // Search Icon Button next to search bar
+            FilledIconButton(
+                onClick = { performSearch(searchQuery) },
+                modifier = Modifier.size(52.dp),
+                shape = RoundedCornerShape(26.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search Flipkart & Amazon"
+                )
+            }
+        }
+
+        // Store Filter Chips Row (Under Search Bar)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            stores.forEach { store ->
+                FilterChip(
+                    selected = selectedStore == store,
+                    onClick = { selectedStore = store },
+                    label = { Text(store) }
+                )
+            }
+        }
+
+        // Loading Progress Bar
+        AnimatedVisibility(visible = isLoading) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                LinearProgressIndicator(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = if (searchError != null) Icons.Default.SearchOff else Icons.Default.Search,
-                            contentDescription = "Search Products",
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (searchError != null) "No results found" else "Search for products",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = searchError
-                                ?: "Enter product name above (e.g. 'laptop', 'wireless headphones', 'shoes') to scrape live results from Flipkart & Amazon.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
+                        .fillMaxWidth()
+                        .height(4.dp)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Scraping live products from Flipkart & Amazon...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        // Results Header Info Bar (Only shown when rawProductList is loaded)
+        if (rawProductList.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${filteredProductList.size} of ${rawProductList.size} Products",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    if (isScrapedData) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = "Flipkart & Amazon Live",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Flipkart & Amazon Live",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
-            } else if (filteredProductList.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
+
+                TextButton(
+                    onClick = {
+                        searchQuery = ""
+                        rawProductList = emptyList()
+                        selectedStore = "All"
+                        isScrapedData = false
+                        searchError = null
+                    }
                 ) {
                     Text(
-                        text = "No products found for store '$selectedStore'",
+                        text = "Clear Results",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
+        // Product Grid or Search Prompt / Empty State
+        if (rawProductList.isEmpty() && !isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (searchError != null) Icons.Default.SearchOff else Icons.Default.Search,
+                        contentDescription = "Search Products",
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (searchError != null) "No results found" else "Search for products",
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = searchError
+                            ?: "Enter product name above (e.g. 'laptop', 'wireless headphones', 'shoes') to scrape live results from Flipkart & Amazon.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                 }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(
-                        items = filteredProductList,
-                        key = { it.id }
-                    ) { product ->
-                        val isTracked = trackedProducts.any { it.id == product.id }
+            }
+        } else if (filteredProductList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No products found for store '$selectedStore'",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(
+                    items = filteredProductList,
+                    key = { it.id }
+                ) { product ->
+                    val isTracked = trackedProducts.any { it.id == product.id }
 
-                        ProductCard(
-                            product = product,
-                            isTracked = isTracked,
-                            onProductClick = { clickedProduct ->
-                                if (clickedProduct.link.isNotBlank()) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(clickedProduct.link))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(clickedProduct.title)
-                                        }
-                                    }
-                                } else {
+                    ProductCard(
+                        product = product,
+                        isTracked = isTracked,
+                        onProductClick = { clickedProduct ->
+                            if (clickedProduct.link.isNotBlank()) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(clickedProduct.link))
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
                                     scope.launch {
                                         snackbarHostState.showSnackbar(clickedProduct.title)
                                     }
                                 }
-                            },
-                            onTrackClick = { productToTrack ->
-                                if (isTracked) {
-                                    TrackingRepository.removeTrackedProduct(productToTrack.id)
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Removed from price tracking")
-                                    }
-                                } else {
-                                    TrackingRepository.addTrackedProduct(productToTrack)
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Added '${productToTrack.title}' to price tracking!")
-                                    }
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(clickedProduct.title)
                                 }
                             }
-                        )
-                    }
+                        },
+                        onTrackClick = { productToTrack ->
+                            if (isTracked) {
+                                TrackingRepository.removeTrackedProduct(productToTrack.id)
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Removed from price tracking")
+                                }
+                            } else {
+                                TrackingRepository.addTrackedProduct(productToTrack)
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Added '${productToTrack.title}' to price tracking!")
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun HomeScreenPreview() {
-    AppTheme {
-        HomeScreen()
     }
 }

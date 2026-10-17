@@ -209,7 +209,7 @@ fun TrackedProductCard(
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
-                                text = "Tracked",
+                                text = formatRelativeTime(product.lastTrackedTime),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
