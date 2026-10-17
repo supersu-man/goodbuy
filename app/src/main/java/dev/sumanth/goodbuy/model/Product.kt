@@ -25,8 +25,10 @@ data class Product(
         get() = when {
             link.contains("amazon", ignoreCase = true) -> "Amazon"
             link.contains("flipkart", ignoreCase = true) -> "Flipkart"
+            link.contains("myntra", ignoreCase = true) -> "Myntra"
             id.startsWith("amazon", ignoreCase = true) -> "Amazon"
             id.startsWith("flipkart", ignoreCase = true) -> "Flipkart"
+            id.startsWith("myntra", ignoreCase = true) -> "Myntra"
             else -> "Amazon"
         }
 }

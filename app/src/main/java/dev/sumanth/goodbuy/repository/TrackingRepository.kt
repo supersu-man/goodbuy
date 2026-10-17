@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import dev.sumanth.goodbuy.model.Product
 import dev.sumanth.goodbuy.model.TrackedGroup
+import dev.sumanth.goodbuy.scraper.AmazonScraper
+import dev.sumanth.goodbuy.scraper.FlipkartScraper
+import dev.sumanth.goodbuy.scraper.MyntraScraper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,14 +81,26 @@ object TrackingRepository {
 
         for (i in updatedProducts.indices) {
             val product = updatedProducts[i]
-            val queryTerm = product.title.take(30)
             try {
-                val searchResult = ProductRepository.searchAll(queryTerm)
-                var productUpdated = false
-                searchResult.onSuccess { liveProducts ->
-                    val match = liveProducts.find { it.id == product.id || (it.link.isNotBlank() && it.link == product.link) }
-                        ?: liveProducts.firstOrNull { it.displayStore == product.displayStore }
+                val singleResult = when {
+                    product.displayStore.equals("Amazon", ignoreCase = true) || product.link.contains("amazon", ignoreCase = true) || product.id.startsWith("amazon", ignoreCase = true) -> {
+                        AmazonScraper.scrapeAmazonProduct(product.link.ifEmpty { product.id })
+                    }
+                    product.displayStore.equals("Flipkart", ignoreCase = true) || product.link.contains("flipkart", ignoreCase = true) -> {
+                        FlipkartScraper.scrapeFlipkartProduct(product.link.ifEmpty { product.id })
+                    }
+                    product.displayStore.equals("Myntra", ignoreCase = true) || product.link.contains("myntra", ignoreCase = true) || product.id.startsWith("myntra", ignoreCase = true) -> {
+                        MyntraScraper.scrapeMyntraProduct(product.link.ifEmpty { product.id })
+                    }
+                    else -> {
+                        val queryTerm = product.title.take(30)
+                        val searchResult = ProductRepository.searchAll(queryTerm)
+                        searchResult.map { list -> list.find { it.id == product.id || it.link == product.link } ?: list.firstOrNull() ?: product }
+                    }
+                }
 
+                var productUpdated = false
+                singleResult.onSuccess { match ->
                     if (match != null && match.newPrice > 0.0) {
                         if (match.newPrice != product.newPrice) {
                             updatedProducts[i] = product.copy(
@@ -99,6 +114,24 @@ object TrackingRepository {
                         }
                     }
                 }
+
+                if (!productUpdated && product.link.isBlank()) {
+                    val queryTerm = product.title.take(30)
+                    val searchResult = ProductRepository.searchAll(queryTerm)
+                    searchResult.onSuccess { liveProducts ->
+                        val match = liveProducts.find { it.id == product.id || it.link == product.link }
+                        if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
+                            updatedProducts[i] = product.copy(
+                                oldPrice = product.newPrice,
+                                newPrice = match.newPrice,
+                                lastTrackedTime = currentTime
+                            )
+                            updatedCount++
+                            productUpdated = true
+                        }
+                    }
+                }
+
                 if (!productUpdated) {
                     updatedProducts[i] = updatedProducts[i].copy(lastTrackedTime = currentTime)
                 }

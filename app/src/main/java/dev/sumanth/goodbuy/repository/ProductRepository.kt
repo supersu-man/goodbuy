@@ -3,6 +3,7 @@ package dev.sumanth.goodbuy.repository
 import dev.sumanth.goodbuy.model.Product
 import dev.sumanth.goodbuy.scraper.AmazonScraper
 import dev.sumanth.goodbuy.scraper.FlipkartScraper
+import dev.sumanth.goodbuy.scraper.MyntraScraper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -119,28 +120,27 @@ object ProductRepository {
         return AmazonScraper.searchAmazon(query)
     }
 
+    suspend fun searchMyntra(query: String): Result<List<Product>> {
+        return MyntraScraper.searchMyntra(query)
+    }
+
     suspend fun searchAll(query: String): Result<List<Product>> = withContext(Dispatchers.IO) {
         val flipkartDeferred = async { FlipkartScraper.searchFlipkart(query) }
         val amazonDeferred = async { AmazonScraper.searchAmazon(query) }
+        val myntraDeferred = async { MyntraScraper.searchMyntra(query) }
 
         val flipkartResult = flipkartDeferred.await()
         val amazonResult = amazonDeferred.await()
+        val myntraResult = myntraDeferred.await()
 
         val products = mutableListOf<Product>()
-        var flipkartCount = 0
-        var amazonCount = 0
 
-        flipkartResult.onSuccess {
-            flipkartCount = it.size
-            products.addAll(it)
-        }
-        amazonResult.onSuccess {
-            amazonCount = it.size
-            products.addAll(it)
-        }
+        flipkartResult.onSuccess { products.addAll(it) }
+        amazonResult.onSuccess { products.addAll(it) }
+        myntraResult.onSuccess { products.addAll(it) }
 
-        if (products.isEmpty() && flipkartResult.isFailure && amazonResult.isFailure) {
-            Result.failure(flipkartResult.exceptionOrNull() ?: amazonResult.exceptionOrNull() ?: Exception("Search failed"))
+        if (products.isEmpty() && flipkartResult.isFailure && amazonResult.isFailure && myntraResult.isFailure) {
+            Result.failure(flipkartResult.exceptionOrNull() ?: amazonResult.exceptionOrNull() ?: myntraResult.exceptionOrNull() ?: Exception("Search failed"))
         } else {
             Result.success(products)
         }

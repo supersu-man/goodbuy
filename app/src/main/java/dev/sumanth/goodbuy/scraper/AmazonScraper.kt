@@ -1,32 +1,20 @@
 package dev.sumanth.goodbuy.scraper
 
 import dev.sumanth.goodbuy.model.Product
+import dev.sumanth.goodbuy.util.ScraperUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import java.net.URLEncoder
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 object AmazonScraper {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
-
-    private const val USER_AGENT =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
     /**
-     * Scrapes search results from Amazon.in for a given query.
-     * Excludes sponsored / ad products as requested.
+     * Scrapes search results from Amazon.in for a given query matching the JS scraper implementation.
      *
-     * @param query Search query term (e.g., "laptop", "wireless headphones", "running shoes")
+     * @param query Search query term (e.g., "watch", "running shoes")
      * @param pages Number of search result pages to fetch (default = 1)
      * @return Result containing list of scraped [Product] items or Exception
      */
@@ -41,38 +29,32 @@ object AmazonScraper {
 
         val allProducts = mutableListOf<Product>()
         val seenAsins = mutableSetOf<String>()
-
-        val encodedQuery = try {
-            URLEncoder.encode(trimmedQuery, "UTF-8")
-        } catch (e: Exception) {
-            trimmedQuery
-        }
+        val encodedQuery = ScraperUtils.encodeQuery(trimmedQuery)
 
         for (page in 1..pages) {
             val pageParam = if (page > 1) "&page=$page" else ""
-            val searchUrl = "https://www.amazon.in/s?k=$encodedQuery$pageParam"
+            val searchUrl = "https://www.amazon.in/s?k=$encodedQuery&i=aps$pageParam"
+            val referer = "https://www.amazon.in/s/ref=nb_sb_noss_2?url=search-alias%3Daps&field-keywords=$encodedQuery"
 
-            val request = Request.Builder()
-                .url(searchUrl)
-                .header("User-Agent", USER_AGENT)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-                .header("Accept-Language", "en-US,en;q=0.9")
-                .header("Cache-Control", "no-cache")
-                .header("Pragma", "no-cache")
-                .header("Upgrade-Insecure-Requests", "1")
-                .build()
+            val headers = ScraperUtils.getHeaders(referer)
+            val requestBuilder = Request.Builder().url(searchUrl)
+            headers.forEach { (key, value) -> requestBuilder.header(key, value) }
 
             try {
-                val response = client.newCall(request).execute()
+                val response = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute()
                 val html = response.body?.string() ?: ""
                 response.close()
 
                 if (html.isNotEmpty()) {
+                    if (html.contains("validateCaptcha", ignoreCase = true) || html.contains("Robot Check", ignoreCase = true)) {
+                        break
+                    }
+
                     val doc = Jsoup.parse(html, "https://www.amazon.in")
                     val pageProducts = parseAmazonHtml(doc, trimmedQuery)
 
                     for (product in pageProducts) {
-                        if (seenAsins.add(product.id.ifEmpty { product.link })) {
+                        if (seenAsins.add(product.id)) {
                             allProducts.add(product)
                         }
                     }
@@ -87,91 +69,139 @@ object AmazonScraper {
         Result.success(allProducts)
     }
 
+    /**
+     * Scrapes a single product page on Amazon.in (matches amazon/product-scraper.js).
+     */
+    suspend fun scrapeAmazonProduct(asinOrUrl: String): Result<Product> = withContext(Dispatchers.IO) {
+        val url = if (asinOrUrl.startsWith("http")) {
+            asinOrUrl
+        } else {
+            val cleanAsin = asinOrUrl.removePrefix("amazon_")
+            "https://www.amazon.in/dp/$cleanAsin"
+        }
+
+        val headers = ScraperUtils.getHeaders(url)
+        val request = Request.Builder().url(url).apply {
+            headers.forEach { (k, v) -> header(k, v) }
+        }.build()
+
+        try {
+            val response = ScraperUtils.httpClient.newCall(request).execute()
+            val html = response.body?.string() ?: ""
+            response.close()
+
+            if (html.isBlank()) return@withContext Result.failure(Exception("Empty response"))
+
+            val doc = Jsoup.parse(html, url)
+            val asinMatch = Regex("/dp/([A-Za-z0-9]{10})", RegexOption.IGNORE_CASE).find(url) ?: Regex("/dp/([A-Za-z0-9]{10})", RegexOption.IGNORE_CASE).find(html)
+            val asin = asinMatch?.groupValues?.get(1) ?: "UNKNOWN"
+
+            val title = doc.selectFirst("#productTitle")?.text()?.trim() ?: doc.title().trim()
+            if (title.isBlank()) return@withContext Result.failure(Exception("Product title not found"))
+
+            val brand = doc.selectFirst("#bylineInfo")?.text()?.trim()
+                ?.replace(Regex("^Visit the\\s+", RegexOption.IGNORE_CASE), "")
+                ?.replace(Regex("\\s+Store$", RegexOption.IGNORE_CASE), "")
+                ?.replace(Regex("^Brand:\\s*", RegexOption.IGNORE_CASE), "")
+                ?: doc.selectFirst("#brand")?.text()?.trim() ?: ""
+
+            val priceText = doc.selectFirst(".a-price:not(.a-text-price) span.a-offscreen")?.text()
+                ?: doc.selectFirst("#apex-pricetopay-accessibility-label")?.text() ?: ""
+            val mrpText = doc.selectFirst(".a-text-price span.a-offscreen")?.text() ?: ""
+
+            val newPrice = ScraperUtils.parsePrice(priceText)
+            val oldPrice = ScraperUtils.parsePrice(mrpText)
+
+            val ratingText = doc.selectFirst("span.a-icon-alt, i.a-icon-star span")?.text() ?: ""
+            val rating = ScraperUtils.parseRating(ratingText)
+
+            val reviewsText = doc.selectFirst("#acrCustomerReviewText")?.text() ?: ""
+            val reviewCount = ScraperUtils.parseReviewCount(reviewsText)
+
+            val imgEl = doc.selectFirst("img#landingImage, div#imgTagWrapperId img, img.a-dynamic-image")
+            var image = imgEl?.attr("src") ?: ""
+            if (image.startsWith("//")) image = "https:$image"
+
+            Result.success(
+                Product(
+                    id = "amazon_$asin",
+                    title = title,
+                    description = if (brand.isNotBlank()) "Brand: $brand" else "Scraped from Amazon Product Page",
+                    category = "General",
+                    imageUrl = image,
+                    oldPrice = if (oldPrice > newPrice) oldPrice else 0.0,
+                    newPrice = if (newPrice > 0.0) newPrice else oldPrice,
+                    rating = rating,
+                    reviewCount = reviewCount,
+                    link = url
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun parseAmazonHtml(doc: Document, categoryQuery: String): List<Product> {
         val results = mutableListOf<Product>()
+        val cards = doc.select("div[data-asin]")
+        val seenAsins = mutableSetOf<String>()
 
-        // Select search result cards with data-component-type="s-search-result" and data-asin
-        val cards = doc.select("[data-component-type=s-search-result][data-asin]:not([data-asin=\"\"])")
-        val processedAsins = mutableSetOf<String>()
+        for (el in cards) {
+            val asin = el.attr("data-asin")
+            if (asin.isBlank() || asin.length != 10 || seenAsins.contains(asin)) continue
+            if (el.hasClass("s-widget-spacing-small") && el.select("h2").isEmpty()) continue
 
-        for (card in cards) {
-            val asin = card.attr("data-asin")
-            if (asin.isBlank() || processedAsins.contains(asin)) continue
-
-            // Guard: require product image
-            val imgEl = card.selectFirst("img.s-image") ?: continue
-
-            // Skip sponsored / ad cards (do not scrape sponsored products)
-            val isSponsored = card.selectFirst(".puis-sponsored-label-text, [aria-label=\"Sponsored\"], span.s-sponsored-label-info-icon") != null ||
-                    card.text().contains("Sponsored", ignoreCase = true) && card.text().contains("Ad", ignoreCase = true)
-            if (isSponsored) continue
-
-            processedAsins.add(asin)
-
-            // 1. Extract Image
-            var image = imgEl.attr("src")
-            val dataSrc = imgEl.attr("data-src")
-            if (dataSrc.isNotBlank() && !dataSrc.startsWith("data:")) {
-                image = dataSrc
-            }
-            if (image.startsWith("//")) {
-                image = "https:$image"
-            }
-            if (image.isBlank() || image.startsWith("data:image/svg+xml")) continue
-
-            // 2. Extract Title
-            val titleAnchor = card.selectFirst("a.a-text-normal.s-line-clamp-2, a.a-text-normal.s-line-clamp-3, a.a-text-normal.s-line-clamp-4, h2 a span, a.a-link-normal.s-line-clamp-2")
-                ?: card.select("a.a-text-normal").firstOrNull { !it.hasClass("puis-sponsored-label-text") }
-
-            var title = titleAnchor?.text()?.trim() ?: imgEl.attr("alt").trim()
-            if (title.isBlank()) {
-                val h2El = card.selectFirst("h2")
-                title = h2El?.text()?.trim() ?: ""
-            }
-            title = title.lineSequence().firstOrNull()?.trim() ?: ""
+            // 1. Title & Brand
+            val titleEl = el.selectFirst("h2 span, h2 a span")
+            val title = titleEl?.text()?.trim() ?: ""
             if (title.isBlank()) continue
 
-            // 3. Extract Prices (.a-offscreen)
-            val currentPriceEl = card.selectFirst("span.a-price:not(.a-text-price) span.a-offscreen")
-            val strikePriceEl = card.selectFirst("span.a-text-price span.a-offscreen, span.a-price.a-text-price span.a-offscreen")
-
-            val currentPriceStr = currentPriceEl?.text()?.trim() ?: run {
-                card.allElements.firstOrNull { it.childrenSize() == 0 && (it.text().contains("₹") || it.text().contains("Rs")) }?.text()?.trim() ?: ""
-            }
-            val originalPriceStr = strikePriceEl?.text()?.trim() ?: ""
-
-            val newPrice = parsePrice(currentPriceStr)
-            val oldPrice = parsePrice(originalPriceStr)
-
-            if (newPrice <= 0.0) continue
-
-            // 4. Extract Discount
-            val badgeEl = card.selectFirst(".a-badge-text, .savingsPercentage")
-            val discountText = badgeEl?.text()?.trim() ?: run {
-                card.allElements.firstOrNull { it.childrenSize() == 0 && Regex("\\b\\d+%\\s*off\\b", RegexOption.IGNORE_CASE).containsMatchIn(it.text()) }?.text()?.trim() ?: ""
+            var brand = ""
+            val titleWords = title.split(" ")
+            if (titleWords.isNotEmpty()) {
+                brand = titleWords[0].replace(Regex("[^A-Za-z0-9]"), "")
             }
 
-            // 5. Extract Rating
-            val ratingEl = card.selectFirst("span[aria-label*=\"out of 5 stars\"], i.a-icon-star span, .a-icon-alt")
-            val ratingStr = ratingEl?.attr("aria-label")?.let {
-                Regex("([1-5](?:\\.\\d)?)\\s*out of", RegexOption.IGNORE_CASE).find(it)?.groupValues?.get(1)
-            } ?: ratingEl?.text() ?: Regex("\\b([1-5]\\.\\d)\\b").find(card.text())?.groupValues?.get(1) ?: "4.3"
+            // 2. Prices
+            val priceRaw = el.selectFirst(".a-price:not(.a-text-price) span.a-offscreen")?.text() ?: ""
+            val mrpRaw = el.selectFirst(".a-price.a-text-price span.a-offscreen")?.text() ?: ""
 
-            val rating = parseRating(ratingStr)
+            val price = ScraperUtils.parsePrice(priceRaw)
+            val mrp = ScraperUtils.parsePrice(mrpRaw).let { if (it > 0.0) it else price }
+            if (price <= 0.0 && mrp <= 0.0) continue
 
-            // 6. Extract Reviews Count
-            val reviewsAriaEl = card.selectFirst("span[aria-label*=\"ratings\"], span[aria-label*=\"rating\"]")
-            val reviewsMatch = reviewsAriaEl?.attr("aria-label")?.let {
-                Regex("([\\d,\\.]+[KkMm]?)\\s*ratings?", RegexOption.IGNORE_CASE).find(it)?.value
-            } ?: card.selectFirst("a.s-underline-link-text span, a[href*=\"#customerReviews\"] span, .a-size-base.s-underline-text")?.text()?.trim() ?: ""
+            // 3. Discount
+            val discount = if (mrp > price && price > 0.0) {
+                "${Math.round(((mrp - price) / mrp) * 100)}% off"
+            } else {
+                ""
+            }
 
-            val reviewCount = parseReviewCount(reviewsMatch)
+            // 4. Rating & Review Count
+            val ratingText = el.selectFirst("span.a-icon-alt")?.text() ?: ""
+            val ratingMatch = Regex("([\\d.]+)\\s*out of", RegexOption.IGNORE_CASE).find(ratingText)
+            val rating = ratingMatch?.groupValues?.get(1)?.toDoubleOrNull() ?: 4.3
 
-            // 7. Link & Category
-            val fullLink = "https://www.amazon.in/dp/$asin"
+            val reviewsText = el.selectFirst("span.a-size-base.s-underline-text, a[href*=\"#customerReviews\"] span")?.text() ?: ""
+            val reviewCount = ScraperUtils.parseReviewCount(reviewsText)
+
+            // 5. Sponsored status
+            val sponsored = el.selectFirst("span.s-label-popover-default, span.puis-sponsored-label-text, span:contains(\"Sponsored\")") != null
+            if (sponsored) continue
+
+            // 6. Image
+            val imgEl = el.selectFirst("img.s-image")
+            var image = imgEl?.attr("src") ?: ""
+            if (image.startsWith("//")) image = "https:$image"
+
+            // 7. Canonical Product Link
+            val productUrl = "https://www.amazon.in/dp/$asin"
+            seenAsins.add(asin)
+
             val descriptionStr = buildString {
-                if (discountText.isNotBlank()) append("$discountText • ")
-                if (reviewsMatch.isNotBlank()) append(reviewsMatch) else append("Amazon Delivered")
+                if (discount.isNotBlank()) append("$discount • ")
+                if (brand.isNotBlank()) append("Brand: $brand • ")
+                append("Amazon Delivered")
             }.trim(' ', '•')
 
             val category = categoryQuery.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
@@ -180,37 +210,19 @@ object AmazonScraper {
                 Product(
                     id = "amazon_$asin",
                     title = title,
-                    description = if (descriptionStr.isNotBlank()) descriptionStr else "Scraped from Amazon",
+                    description = descriptionStr,
                     category = category,
                     imageUrl = image,
-                    oldPrice = if (oldPrice > newPrice) oldPrice else 0.0,
-                    newPrice = newPrice,
+                    oldPrice = if (mrp > price) mrp else 0.0,
+                    newPrice = if (price > 0.0) price else mrp,
                     rating = rating,
                     reviewCount = reviewCount,
                     isFavorite = false,
-                    link = fullLink
+                    link = productUrl
                 )
             )
         }
 
         return results
-    }
-
-    private fun parsePrice(priceStr: String): Double {
-        if (priceStr.isBlank()) return 0.0
-        val clean = priceStr.replace(Regex("[^0-9.]"), "")
-        return clean.toDoubleOrNull() ?: 0.0
-    }
-
-    private fun parseRating(ratingStr: String): Double {
-        if (ratingStr.isBlank()) return 4.3
-        val clean = Regex("([1-5]\\.\\d)").find(ratingStr)?.value ?: ratingStr.replace(Regex("[^0-9.]"), "")
-        return clean.toDoubleOrNull()?.coerceIn(1.0, 5.0) ?: 4.3
-    }
-
-    private fun parseReviewCount(reviewStr: String): Int {
-        if (reviewStr.isBlank()) return (100..1000).random()
-        val numStr = Regex("([\\d,]+)").find(reviewStr)?.value?.replace(",", "") ?: ""
-        return numStr.toIntOrNull() ?: (100..1000).random()
     }
 }

@@ -73,12 +73,13 @@ fun HomeScreen(
 
     val trackedProducts by TrackingRepository.trackedProducts.collectAsState()
 
-    val stores = listOf("All", "Amazon", "Flipkart")
+    val stores = listOf("All", "Amazon", "Flipkart", "Myntra")
 
     val filteredProductList = remember(rawProductList, selectedStore) {
         when (selectedStore) {
             "Amazon" -> rawProductList.filter { it.displayStore.equals("Amazon", ignoreCase = true) }
             "Flipkart" -> rawProductList.filter { it.displayStore.equals("Flipkart", ignoreCase = true) }
+            "Myntra" -> rawProductList.filter { it.displayStore.equals("Myntra", ignoreCase = true) }
             else -> rawProductList
         }
     }
@@ -106,7 +107,7 @@ fun HomeScreen(
                     if (distinctItems.isNotEmpty()) {
                         rawProductList = distinctItems
                         isScrapedData = true
-                        snackbarHostState.showSnackbar("Found ${distinctItems.size} live results from Flipkart & Amazon")
+                        snackbarHostState.showSnackbar("Found ${distinctItems.size} live results from Flipkart, Amazon & Myntra")
                     } else {
                         rawProductList = emptyList()
                         searchError = "No products found for '$term'"
@@ -137,7 +138,7 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f),
                 placeholder = {
                     Text(
-                        text = "Search Flipkart & Amazon...",
+                        text = "Search Flipkart, Amazon & Myntra...",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -183,7 +184,7 @@ fun HomeScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
-                    contentDescription = "Search Flipkart & Amazon"
+                    contentDescription = "Search Flipkart, Amazon & Myntra"
                 )
             }
         }
@@ -219,7 +220,7 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Scraping live products from Flipkart & Amazon...",
+                    text = "Scraping live products from Flipkart, Amazon & Myntra...",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -255,13 +256,13 @@ fun HomeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CloudDownload,
-                                    contentDescription = "Flipkart & Amazon Live",
+                                    contentDescription = "Flipkart, Amazon & Myntra Live",
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Flipkart & Amazon Live",
+                                    text = "Flipkart, Amazon & Myntra Live",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     fontWeight = FontWeight.Bold
@@ -316,7 +317,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = searchError
-                            ?: "Enter product name above (e.g. 'laptop', 'wireless headphones', 'shoes') to scrape live results from Flipkart & Amazon.",
+                            ?: "Enter product name above (e.g. 'laptop', 'shirt', 'headphones') to scrape live results from Flipkart, Amazon & Myntra.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
