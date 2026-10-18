@@ -41,9 +41,9 @@ object AmazonScraper {
             headers.forEach { (key, value) -> requestBuilder.header(key, value) }
 
             try {
-                val response = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute()
-                val html = response.body?.string() ?: ""
-                response.close()
+                val html = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                    response.body?.string() ?: ""
+                }
 
                 if (html.isNotEmpty()) {
                     if (html.contains("validateCaptcha", ignoreCase = true) || html.contains("Robot Check", ignoreCase = true)) {
@@ -86,9 +86,9 @@ object AmazonScraper {
         }.build()
 
         try {
-            val response = ScraperUtils.httpClient.newCall(request).execute()
-            val html = response.body?.string() ?: ""
-            response.close()
+            val html = ScraperUtils.httpClient.newCall(request).execute().use { response ->
+                response.body?.string() ?: ""
+            }
 
             if (html.isBlank()) return@withContext Result.failure(Exception("Empty response"))
 

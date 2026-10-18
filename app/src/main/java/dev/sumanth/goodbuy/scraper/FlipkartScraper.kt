@@ -42,12 +42,14 @@ object FlipkartScraper {
             headers.forEach { (key, value) -> requestBuilder.header(key, value) }
 
             try {
-                val response = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute()
-                val html = response.body?.string() ?: ""
-                response.close()
+                val (html, isBlocked) = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                    val bodyText = response.body?.string() ?: ""
+                    val blocked = response.code == 403 || response.code == 429
+                    Pair(bodyText, blocked)
+                }
 
                 if (html.isNotEmpty()) {
-                    if (response.code == 403 || response.code == 429) {
+                    if (isBlocked) {
                         break
                     }
 
@@ -86,9 +88,9 @@ object FlipkartScraper {
         }.build()
 
         try {
-            val response = ScraperUtils.httpClient.newCall(request).execute()
-            val html = response.body?.string() ?: ""
-            response.close()
+            val html = ScraperUtils.httpClient.newCall(request).execute().use { response ->
+                response.body?.string() ?: ""
+            }
 
             if (html.isBlank()) return@withContext Result.failure(Exception("Empty response"))
 
