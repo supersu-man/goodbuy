@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -43,21 +44,27 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.sumanth.goodbuy.repository.TrackingRepository
 import dev.sumanth.goodbuy.ui.screens.HomeScreen
 import dev.sumanth.goodbuy.ui.screens.TrackingScreen
 import dev.sumanth.goodbuy.ui.theme.AppTheme
+import dev.sumanth.goodbuy.ui.viewmodel.HomeViewModel
+import dev.sumanth.goodbuy.ui.viewmodel.TrackingViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -78,36 +85,43 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-fun MainApp() {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val trackedProducts by TrackingRepository.trackedProducts.collectAsState()
-    val trackedGroups by TrackingRepository.trackedGroups.collectAsState()
+fun MainApp(
+    homeViewModel: HomeViewModel = viewModel(),
+    trackingViewModel: TrackingViewModel = viewModel()
+) {
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val trackingState by trackingViewModel.uiState.collectAsStateWithLifecycle()
+    val trackedProducts = trackingState.trackedProducts
+    val trackedGroups = trackingState.trackedGroups
+    val isSelectionMode = trackingState.isSelectionMode
 
-    var isSelectionMode by remember { mutableStateOf(false) }
-    var selectedProductIds by remember { mutableStateOf(setOf<String>()) }
-    var selectedGroupIds by remember { mutableStateOf(setOf<String>()) }
-
-    var showClearAllDialog by remember { mutableStateOf(false) }
+    var showClearAllDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val homeGridState = rememberLazyGridState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(selectedTab) {
-        if (selectedTab == 1) {
-            val updatedCount = TrackingRepository.checkAndRefreshTrackedPrices(minIntervalMillis = 30 * 60 * 1000L)
-            if (updatedCount > 0) {
-                snackbarHostState.showSnackbar("Updated prices for $updatedCount products!")
+    LaunchedEffect(homeViewModel, trackingViewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                homeViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+            }
+            launch {
+                trackingViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
             }
         }
     }
 
-    val totalSelectedCount = selectedProductIds.size + selectedGroupIds.size
-
-    val exitSelectionMode = {
-        isSelectionMode = false
-        selectedProductIds = emptySet()
-        selectedGroupIds = emptySet()
+    LaunchedEffect(selectedTab, trackingViewModel, lifecycleOwner) {
+        if (selectedTab == 1) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                trackingViewModel.monitorPrices()
+            }
+        }
     }
+
+    val totalSelectedCount = trackingState.totalSelectedCount
+    val exitSelectionMode = trackingViewModel::exitSelectionMode
 
     Scaffold(
         modifier = Modifier.fillMaxSize().safeDrawingPadding(),
@@ -158,24 +172,7 @@ fun MainApp() {
                         },
                         actions = {
                             Button(
-                                onClick = {
-                                    if (totalSelectedCount >= 2) {
-                                        val newGroup = TrackingRepository.groupProducts(
-                                            selectedProductIds.toList(),
-                                            selectedGroupIds.toList()
-                                        )
-                                        exitSelectionMode()
-                                        if (newGroup != null) {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Products grouped together successfully!")
-                                            }
-                                        }
-                                    } else {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Select at least 2 items to group them")
-                                        }
-                                    }
-                                },
+                                onClick = trackingViewModel::groupSelected,
                                 enabled = totalSelectedCount >= 2,
                                 modifier = Modifier.padding(end = 8.dp),
                                 shape = MaterialTheme.shapes.small
@@ -299,15 +296,12 @@ fun MainApp() {
             when (tab) {
                 0 -> HomeScreen(
                     snackbarHostState = snackbarHostState,
+                    homeViewModel = homeViewModel,
+                    gridState = homeGridState,
                     modifier = Modifier.fillMaxSize()
                 )
                 1 -> TrackingScreen(
-                    isSelectionMode = isSelectionMode,
-                    selectedProductIds = selectedProductIds,
-                    selectedGroupIds = selectedGroupIds,
-                    onSelectionModeChange = { isSelectionMode = it },
-                    onSelectedProductIdsChange = { selectedProductIds = it },
-                    onSelectedGroupIdsChange = { selectedGroupIds = it },
+                    trackingViewModel = trackingViewModel,
                     snackbarHostState = snackbarHostState,
                     onNavigateToSearch = { selectedTab = 0 },
                     modifier = Modifier.fillMaxSize()
@@ -335,11 +329,7 @@ fun MainApp() {
                     TextButton(
                         onClick = {
                             showClearAllDialog = false
-                            TrackingRepository.clearAll()
-                            exitSelectionMode()
-                            scope.launch {
-                                snackbarHostState.showSnackbar("All tracked items cleared")
-                            }
+                            trackingViewModel.clearAll()
                         }
                     ) {
                         Text(

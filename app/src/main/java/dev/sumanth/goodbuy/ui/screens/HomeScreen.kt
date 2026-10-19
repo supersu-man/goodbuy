@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,12 +41,9 @@ import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,74 +52,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import dev.sumanth.goodbuy.model.Product
-import dev.sumanth.goodbuy.repository.ProductRepository
-import dev.sumanth.goodbuy.repository.TrackingRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.sumanth.goodbuy.ui.components.ProductCard
+import dev.sumanth.goodbuy.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    homeViewModel: HomeViewModel = viewModel(),
+    gridState: LazyGridState = rememberLazyGridState()
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var rawProductList by remember { mutableStateOf<List<Product>>(emptyList()) }
-    var selectedStore by remember { mutableStateOf("All") }
-    var isLoading by remember { mutableStateOf(false) }
-    var isScrapedData by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
-
-    val trackedProducts by TrackingRepository.trackedProducts.collectAsState()
+    val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+    val trackedProducts by homeViewModel.trackedProducts.collectAsStateWithLifecycle()
+    val searchQuery = uiState.searchQuery
+    val rawProductList = uiState.products
+    val selectedStore = uiState.selectedStore
+    val isLoading = uiState.isLoading
+    val isScrapedData = uiState.isScrapedData
+    val searchError = uiState.searchError
+    val filteredProductList = uiState.filteredProducts
 
     val stores = listOf("All", "Amazon", "Flipkart", "Myntra")
-
-    val filteredProductList = remember(rawProductList, selectedStore) {
-        when (selectedStore) {
-            "Amazon" -> rawProductList.filter { it.displayStore.equals("Amazon", ignoreCase = true) }
-            "Flipkart" -> rawProductList.filter { it.displayStore.equals("Flipkart", ignoreCase = true) }
-            "Myntra" -> rawProductList.filter { it.displayStore.equals("Myntra", ignoreCase = true) }
-            else -> rawProductList
-        }
-    }
 
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
 
-    // Helper to perform live Flipkart and Amazon scraping
-    val performSearch: (String) -> Unit = { queryTerm ->
+    val performSearch = {
         focusManager.clearFocus()
-        val term = queryTerm.trim()
-        if (term.isBlank()) {
-            rawProductList = emptyList()
-            isScrapedData = false
-            searchError = null
-        } else {
-            isLoading = true
-            searchError = null
-            scope.launch {
-                val result = ProductRepository.searchAll(term)
-                isLoading = false
-                result.onSuccess { items ->
-                    val distinctItems = items.distinctBy { it.id }
-                    if (distinctItems.isNotEmpty()) {
-                        rawProductList = distinctItems
-                        isScrapedData = true
-                        snackbarHostState.showSnackbar("Found ${distinctItems.size} live results from Flipkart, Amazon & Myntra")
-                    } else {
-                        rawProductList = emptyList()
-                        searchError = "No products found for '$term'"
-                        snackbarHostState.showSnackbar("No live results found for '$term'")
-                    }
-                }.onFailure { err ->
-                    rawProductList = emptyList()
-                    searchError = "Search error: ${err.localizedMessage ?: "Failed to connect"}"
-                    snackbarHostState.showSnackbar("Error fetching search results")
-                }
-            }
-        }
+        homeViewModel.search()
     }
 
     Column(
@@ -135,7 +99,7 @@ fun HomeScreen(
         ) {
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
+                onValueChange = homeViewModel::updateSearchQuery,
                 modifier = Modifier.weight(1f),
                 placeholder = {
                     Text(
@@ -151,13 +115,7 @@ fun HomeScreen(
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = {
-                            searchQuery = ""
-                            rawProductList = emptyList()
-                            selectedStore = "All"
-                            isScrapedData = false
-                            searchError = null
-                        }) {
+                        IconButton(onClick = homeViewModel::clearSearch) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
                                 contentDescription = "Clear search"
@@ -168,7 +126,7 @@ fun HomeScreen(
                 singleLine = true,
                 shape = MaterialTheme.shapes.small,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { performSearch(searchQuery) }),
+                keyboardActions = KeyboardActions(onSearch = { performSearch() }),
                 colors = TextFieldDefaults.outlinedTextFieldColors(
                     focusedBorderColor = MaterialTheme.colors.primary,
                     unfocusedBorderColor = MaterialTheme.colors.onSurface.copy(alpha = 0.38f)
@@ -179,7 +137,7 @@ fun HomeScreen(
 
             // Search Icon Button next to search bar
             Surface(
-                onClick = { performSearch(searchQuery) },
+                onClick = performSearch,
                 modifier = Modifier.size(52.dp),
                 shape = MaterialTheme.shapes.small,
                 color = MaterialTheme.colors.primary,
@@ -205,7 +163,7 @@ fun HomeScreen(
             stores.forEach { store ->
                 FilterChip(
                     selected = selectedStore == store,
-                    onClick = { selectedStore = store },
+                    onClick = { homeViewModel.selectStore(store) },
                 ) { Text(store) }
             }
         }
@@ -277,13 +235,7 @@ fun HomeScreen(
                 }
 
                 TextButton(
-                    onClick = {
-                        searchQuery = ""
-                        rawProductList = emptyList()
-                        selectedStore = "All"
-                        isScrapedData = false
-                        searchError = null
-                    }
+                    onClick = homeViewModel::clearSearch
                 ) {
                     Text(
                         text = "Clear Results",
@@ -345,6 +297,7 @@ fun HomeScreen(
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
+                state = gridState,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -375,19 +328,7 @@ fun HomeScreen(
                                 }
                             }
                         },
-                        onTrackClick = { productToTrack ->
-                            if (isTracked) {
-                                TrackingRepository.removeTrackedProduct(productToTrack.id)
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Removed from price tracking")
-                                }
-                            } else {
-                                TrackingRepository.addTrackedProduct(productToTrack)
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Added '${productToTrack.title}' to price tracking!")
-                                }
-                            }
-                        }
+                        onTrackClick = homeViewModel::toggleTracking
                     )
                 }
             }

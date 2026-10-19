@@ -48,12 +48,9 @@ import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,73 +62,43 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import dev.sumanth.goodbuy.model.TrackedGroup
-import dev.sumanth.goodbuy.repository.TrackingRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.sumanth.goodbuy.ui.components.TrackedGroupCard
 import dev.sumanth.goodbuy.ui.components.TrackedProductCard
 import dev.sumanth.goodbuy.ui.components.formatPrice
 import dev.sumanth.goodbuy.ui.components.formatRelativeTime
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import dev.sumanth.goodbuy.ui.viewmodel.TrackingViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun TrackingScreen(
     modifier: Modifier = Modifier,
-    isSelectionMode: Boolean = false,
-    selectedProductIds: Set<String> = emptySet(),
-    selectedGroupIds: Set<String> = emptySet(),
-    onSelectionModeChange: (Boolean) -> Unit = {},
-    onSelectedProductIdsChange: (Set<String>) -> Unit = {},
-    onSelectedGroupIdsChange: (Set<String>) -> Unit = {},
+    trackingViewModel: TrackingViewModel = viewModel(),
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onNavigateToSearch: () -> Unit = {}
 ) {
-    val trackedProducts by TrackingRepository.trackedProducts.collectAsState()
-    val trackedGroups by TrackingRepository.trackedGroups.collectAsState()
-    val lastRefreshedTime by TrackingRepository.lastRefreshedTime.collectAsState()
-
-    var selectedGroupForDetails by remember { mutableStateOf<TrackedGroup?>(null) }
-    var isRefreshingPrices by remember { mutableStateOf(false) }
+    val uiState by trackingViewModel.uiState.collectAsStateWithLifecycle()
+    val trackedGroups = uiState.trackedGroups
+    val lastRefreshedTime = uiState.lastRefreshedTime
+    val isSelectionMode = uiState.isSelectionMode
+    val selectedProductIds = uiState.selectedProductIds
+    val selectedGroupIds = uiState.selectedGroupIds
+    val selectedGroupForDetails = uiState.selectedGroupForDetails
+    val isRefreshingPrices = uiState.isRefreshingPrices
+    val ungroupedProducts = uiState.ungroupedProducts
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Auto-refetch when screen is opened and periodically if last tracked time was 30+ min ago
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            if (!isRefreshingPrices) {
-                val updatedCount = TrackingRepository.checkAndRefreshTrackedPrices(minIntervalMillis = 30 * 60 * 1000L)
-                if (updatedCount > 0) {
-                    snackbarHostState.showSnackbar("Updated prices for $updatedCount products!")
-                }
-            }
-            delay(60_000L) // Check every 60 seconds
-        }
-    }
-
-    val ungroupedProducts = remember(trackedProducts, trackedGroups) {
-        val groupedIds = trackedGroups.flatMap { it.productIds }.toSet()
-        trackedProducts.filterNot { it.id in groupedIds }
+    BackHandler(enabled = isSelectionMode) {
+        trackingViewModel.exitSelectionMode()
     }
 
     val refreshState = rememberPullRefreshState(
         refreshing = isRefreshingPrices,
-        onRefresh = {
-            if (!isRefreshingPrices) {
-                isRefreshingPrices = true
-                scope.launch {
-                    val updatedCount = TrackingRepository.refreshTrackedPrices()
-                    isRefreshingPrices = false
-                    if (updatedCount > 0) {
-                        snackbarHostState.showSnackbar("Updated prices for $updatedCount products!")
-                    } else {
-                        snackbarHostState.showSnackbar("All tracked prices are up to date.")
-                    }
-                }
-            }
-        }
+        onRefresh = { trackingViewModel.refreshPrices() }
     )
 
     Box(
@@ -247,7 +214,7 @@ fun TrackingScreen(
                         items = trackedGroups,
                         key = { "group_${it.id}" }
                     ) { group ->
-                        val groupProducts = TrackingRepository.getProductsForGroup(group)
+                        val groupProducts = uiState.productsForGroup(group)
                         val isSelected = selectedGroupIds.contains(group.id)
 
                         TrackedGroupCard(
@@ -257,26 +224,16 @@ fun TrackingScreen(
                             isSelected = isSelected,
                             onClick = { clickedGroup ->
                                 if (isSelectionMode) {
-                                    val updated = if (isSelected) selectedGroupIds - clickedGroup.id else selectedGroupIds + clickedGroup.id
-                                    onSelectedGroupIdsChange(updated)
+                                    trackingViewModel.toggleGroupSelection(clickedGroup.id)
                                 } else {
-                                    selectedGroupForDetails = clickedGroup
+                                    trackingViewModel.showGroupDetails(clickedGroup.id)
                                 }
                             },
                             onLongClick = { clickedGroup ->
-                                if (!isSelectionMode) {
-                                    onSelectionModeChange(true)
-                                    onSelectedGroupIdsChange(setOf(clickedGroup.id))
-                                } else {
-                                    val updated = if (isSelected) selectedGroupIds - clickedGroup.id else selectedGroupIds + clickedGroup.id
-                                    onSelectedGroupIdsChange(updated)
-                                }
+                                trackingViewModel.toggleGroupSelection(clickedGroup.id)
                             },
                             onUngroupClick = { groupToUngroup ->
-                                TrackingRepository.ungroupGroup(groupToUngroup.id)
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Group split into individual tracked products")
-                                }
+                                trackingViewModel.ungroup(groupToUngroup.id)
                             }
                         )
                     }
@@ -294,8 +251,7 @@ fun TrackingScreen(
                             isSelected = isSelected,
                             onClick = { clickedProduct ->
                                 if (isSelectionMode) {
-                                    val updated = if (isSelected) selectedProductIds - clickedProduct.id else selectedProductIds + clickedProduct.id
-                                    onSelectedProductIdsChange(updated)
+                                    trackingViewModel.toggleProductSelection(clickedProduct.id)
                                 } else {
                                     if (clickedProduct.link.isNotBlank()) {
                                         try {
@@ -310,20 +266,9 @@ fun TrackingScreen(
                                 }
                             },
                             onLongClick = { clickedProduct ->
-                                if (!isSelectionMode) {
-                                    onSelectionModeChange(true)
-                                    onSelectedProductIdsChange(setOf(clickedProduct.id))
-                                } else {
-                                    val updated = if (isSelected) selectedProductIds - clickedProduct.id else selectedProductIds + clickedProduct.id
-                                    onSelectedProductIdsChange(updated)
-                                }
+                                trackingViewModel.toggleProductSelection(clickedProduct.id)
                             },
-                            onRemoveClick = { productToRemove ->
-                                TrackingRepository.removeTrackedProduct(productToRemove.id)
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Removed ${productToRemove.title} from tracking")
-                                }
-                            }
+                            onRemoveClick = trackingViewModel::removeProduct
                         )
                     }
                 }
@@ -340,8 +285,8 @@ fun TrackingScreen(
 
         // Group Details Bottom Sheet
         if (selectedGroupForDetails != null) {
-            val group = selectedGroupForDetails!!
-            val products = TrackingRepository.getProductsForGroup(group)
+            val group = selectedGroupForDetails
+            val products = uiState.productsForGroup(group)
             val bestProduct = products.minByOrNull { it.newPrice }
 
             val sheetState = rememberModalBottomSheetState(
@@ -351,7 +296,7 @@ fun TrackingScreen(
 
             LaunchedEffect(sheetState.currentValue) {
                 if (sheetState.currentValue == ModalBottomSheetValue.Hidden) {
-                    selectedGroupForDetails = null
+                    trackingViewModel.dismissGroupDetails()
                 }
             }
             BackHandler {
@@ -388,7 +333,7 @@ fun TrackingScreen(
                                 )
                             }
 
-                            IconButton(onClick = { selectedGroupForDetails = null }) {
+                            IconButton(onClick = trackingViewModel::dismissGroupDetails) {
                                 Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
                             }
                         }
@@ -584,11 +529,7 @@ fun TrackingScreen(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    TrackingRepository.ungroupGroup(group.id)
-                                    selectedGroupForDetails = null
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Group split into single products")
-                                    }
+                                    trackingViewModel.ungroup(group.id)
                                 },
                                 modifier = Modifier.weight(1f),
                                 shape = MaterialTheme.shapes.small
@@ -603,7 +544,7 @@ fun TrackingScreen(
                             }
 
                             Button(
-                                onClick = { selectedGroupForDetails = null },
+                                onClick = trackingViewModel::dismissGroupDetails,
                                 modifier = Modifier.weight(1f),
                                 shape = MaterialTheme.shapes.small
                             ) {
