@@ -22,13 +22,12 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material.Card
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,22 +52,21 @@ fun TrackedProductCard(
     onLongClick: (Product) -> Unit = {},
     onRemoveClick: (Product) -> Unit = {}
 ) {
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val borderColor = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(alpha = 0.12f)
 
-    ElevatedCard(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            else MaterialTheme.colorScheme.surface
-        ),
+    Card(
+        shape = MaterialTheme.shapes.medium,
+        backgroundColor = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f)
+            else MaterialTheme.colors.surface,
+        elevation = 2.dp,
         modifier = modifier
             .fillMaxWidth()
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
                 color = borderColor,
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.medium
             )
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.medium)
             .combinedClickable(
                 onClick = { onClick(product) },
                 onLongClick = { onLongClick(product) }
@@ -80,8 +78,8 @@ fun TrackedProductCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .background(MaterialTheme.colors.onSurface.copy(alpha = 0.06f))
             ) {
                 AsyncImage(
                     model = product.imageUrl,
@@ -92,14 +90,14 @@ fun TrackedProductCard(
 
                 // Store Badge (Bottom Left)
                 Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(topEnd = 12.dp, bottomStart = 16.dp),
+                    color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(topEnd = 4.dp, bottomStart = 8.dp),
                     modifier = Modifier.align(Alignment.BottomStart)
                 ) {
                     Text(
                         text = product.displayStore,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colors.onSurface,
+                        style = MaterialTheme.typography.caption.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
                         ),
@@ -115,7 +113,7 @@ fun TrackedProductCard(
                             .padding(8.dp)
                             .size(28.dp)
                             .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                color = MaterialTheme.colors.surface.copy(alpha = 0.9f),
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -123,7 +121,7 @@ fun TrackedProductCard(
                         Icon(
                             imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                             contentDescription = if (isSelected) "Selected" else "Not Selected",
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -135,14 +133,14 @@ fun TrackedProductCard(
                             .padding(6.dp)
                             .size(32.dp)
                             .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                color = MaterialTheme.colors.surface.copy(alpha = 0.85f),
                                 shape = CircleShape
                             )
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = "Remove from tracking",
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = MaterialTheme.colors.error,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -157,13 +155,13 @@ fun TrackedProductCard(
             ) {
                 Text(
                     text = product.title,
-                    style = MaterialTheme.typography.titleSmall.copy(
+                    style = MaterialTheme.typography.subtitle2.copy(
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 18.sp
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colors.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -176,25 +174,25 @@ fun TrackedProductCard(
                     Column {
                         Text(
                             text = formatPrice(product.newPrice, product.link),
-                            style = MaterialTheme.typography.titleMedium.copy(
+                            style = MaterialTheme.typography.subtitle1.copy(
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colors.primary
                         )
 
                         if (product.oldPrice > product.newPrice) {
                             Text(
                                 text = formatPrice(product.oldPrice, product.link),
-                                style = MaterialTheme.typography.bodySmall.copy(
+                                style = MaterialTheme.typography.caption.copy(
                                     textDecoration = TextDecoration.LineThrough
                                 ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                             )
                         }
                     }
 
                     Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
@@ -204,14 +202,14 @@ fun TrackedProductCard(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.TrendingDown,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                tint = MaterialTheme.colors.onSurface,
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = formatRelativeTime(product.lastTrackedTime),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                style = MaterialTheme.typography.caption.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colors.onSurface
                             )
                         }
                     }

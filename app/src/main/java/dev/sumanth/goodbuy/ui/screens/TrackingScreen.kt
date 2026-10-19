@@ -2,6 +2,7 @@ package dev.sumanth.goodbuy.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,19 +30,22 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetValue
+import androidx.compose.material.OutlinedButton
+import androidx.compose.material.SnackbarHostState
+import androidx.compose.material.Surface
+import androidx.compose.material.Text
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -71,7 +75,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun TrackingScreen(
     modifier: Modifier = Modifier,
@@ -93,7 +97,6 @@ fun TrackingScreen(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Auto-refetch when screen is opened and periodically if last tracked time was 30+ min ago
     LaunchedEffect(Unit) {
@@ -113,8 +116,8 @@ fun TrackingScreen(
         trackedProducts.filterNot { it.id in groupedIds }
     }
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshingPrices,
+    val refreshState = rememberPullRefreshState(
+        refreshing = isRefreshingPrices,
         onRefresh = {
             if (!isRefreshingPrices) {
                 isRefreshingPrices = true
@@ -128,8 +131,11 @@ fun TrackingScreen(
                     }
                 }
             }
-        },
-        modifier = modifier.fillMaxSize()
+        }
+    )
+
+    Box(
+        modifier = modifier.fillMaxSize().pullRefresh(refreshState)
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -137,11 +143,11 @@ fun TrackingScreen(
             // Top Helper Hint Bar - Always visible when items exist (even during selection mode)
             if (ungroupedProducts.isNotEmpty() || trackedGroups.isNotEmpty()) {
                 Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    color = MaterialTheme.colors.secondary.copy(alpha = 0.06f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.small
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -150,7 +156,7 @@ fun TrackingScreen(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colors.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -161,18 +167,18 @@ fun TrackingScreen(
                                 } else {
                                     "Hold (long-press) products to select and group identical items."
                                 },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                style = MaterialTheme.typography.caption,
+                                color = MaterialTheme.colors.onSurface
                             )
                             if (!isSelectionMode && lastRefreshedTime > 0L) {
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Last checked: ${formatRelativeTime(lastRefreshedTime)} • Auto-refreshes if >30m old",
-                                    style = MaterialTheme.typography.labelSmall.copy(
+                                    style = MaterialTheme.typography.caption.copy(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium
                                     ),
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colors.primary
                                 )
                             }
                         }
@@ -196,26 +202,26 @@ fun TrackingScreen(
                             imageVector = Icons.Default.NotificationsActive,
                             contentDescription = "No Tracked Products",
                             modifier = Modifier.size(72.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            tint = MaterialTheme.colors.primary.copy(alpha = 0.6f)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "No Tracked Products Yet",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.subtitle1,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colors.onSurface
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Search for products on Flipkart & Amazon from the Search tab and tap 'Track' to compare and track prices here.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.body2,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = onNavigateToSearch,
-                            shape = RoundedCornerShape(24.dp)
+                            shape = MaterialTheme.shapes.small
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Search,
@@ -324,265 +330,289 @@ fun TrackingScreen(
             }
         }
 
+        PullRefreshIndicator(
+            refreshing = isRefreshingPrices,
+            state = refreshState,
+            modifier = Modifier.align(Alignment.TopCenter),
+            backgroundColor = MaterialTheme.colors.surface,
+            contentColor = MaterialTheme.colors.primaryVariant
+        )
+
         // Group Details Bottom Sheet
         if (selectedGroupForDetails != null) {
             val group = selectedGroupForDetails!!
             val products = TrackingRepository.getProductsForGroup(group)
             val bestProduct = products.minByOrNull { it.newPrice }
 
-            ModalBottomSheet(
-                onDismissRequest = { selectedGroupForDetails = null },
+            val sheetState = rememberModalBottomSheetState(
+                initialValue = ModalBottomSheetValue.Expanded,
+                skipHalfExpanded = true
+            )
+
+            LaunchedEffect(sheetState.currentValue) {
+                if (sheetState.currentValue == ModalBottomSheetValue.Hidden) {
+                    selectedGroupForDetails = null
+                }
+            }
+            BackHandler {
+                scope.launch { sheetState.hide() }
+            }
+
+            ModalBottomSheetLayout(
                 sheetState = sheetState,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 24.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = group.name.ifBlank { "Grouped Products" },
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Text(
-                                text = "${products.size} Products Grouped",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        IconButton(onClick = { selectedGroupForDetails = null }) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Least Price Highlight Card
-                    if (bestProduct != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.LocalOffer,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "LEAST CURRENT PRICE DEAL",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            ),
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = formatPrice(bestProduct.newPrice, bestProduct.link),
-                                        style = MaterialTheme.typography.headlineMedium.copy(
-                                            fontWeight = FontWeight.ExtraBold
-                                        ),
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text(
-                                        text = "Best on ${bestProduct.displayStore}",
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Group Products Comparison",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LazyColumn(
+                sheetShape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxSize(),
+                sheetContent = {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(260.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 24.dp)
                     ) {
-                        items(products, key = { it.id }) { item ->
-                            val isLowest = bestProduct != null && item.id == bestProduct.id
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = group.name.ifBlank { "Grouped Products" },
+                                    style = MaterialTheme.typography.h6.copy(
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Text(
+                                    text = "${products.size} Products Grouped",
+                                    style = MaterialTheme.typography.body2,
+                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
 
-                            ElevatedCard(
-                                shape = RoundedCornerShape(12.dp),
+                            IconButton(onClick = { selectedGroupForDetails = null }) {
+                                Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Least Price Highlight Card
+                        if (bestProduct != null) {
+                            Surface(
+                                color = MaterialTheme.colors.primary.copy(alpha = 0.12f),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(10.dp),
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    AsyncImage(
-                                        model = item.imageUrl,
-                                        contentDescription = item.title,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    )
-
-                                    Spacer(modifier = Modifier.width(10.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.LocalOffer,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colors.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "LEAST CURRENT PRICE DEAL",
+                                                style = MaterialTheme.typography.caption.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.5.sp
+                                                ),
+                                                color = MaterialTheme.colors.primary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = item.title,
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontWeight = FontWeight.SemiBold
+                                            text = formatPrice(bestProduct.newPrice, bestProduct.link),
+                                            style = MaterialTheme.typography.h4.copy(
+                                                fontWeight = FontWeight.ExtraBold
                                             ),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            color = MaterialTheme.colors.onSurface
+                                        )
+                                    }
+
+                                    Surface(
+                                        color = MaterialTheme.colors.primary,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Best on ${bestProduct.displayStore}",
+                                            color = MaterialTheme.colors.onPrimary,
+                                            style = MaterialTheme.typography.caption.copy(
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "Group Products Comparison",
+                            style = MaterialTheme.typography.subtitle2,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colors.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(products, key = { it.id }) { item ->
+                                val isLowest = bestProduct != null && item.id == bestProduct.id
+
+                                Card(
+                                    shape = MaterialTheme.shapes.medium,
+                                    elevation = 2.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AsyncImage(
+                                            model = item.imageUrl,
+                                            contentDescription = item.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(56.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(MaterialTheme.colors.onSurface.copy(alpha = 0.06f))
                                         )
 
-                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
 
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text(
-                                                    text = "${item.displayStore} • ${formatRelativeTime(item.lastTrackedTime)}",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                )
-                                            }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = item.title,
+                                                style = MaterialTheme.typography.body2.copy(
+                                                    fontWeight = FontWeight.SemiBold
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
 
-                                            if (isLowest) {
-                                                Spacer(modifier = Modifier.width(6.dp))
+                                            Spacer(modifier = Modifier.height(2.dp))
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Surface(
-                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
                                                     shape = RoundedCornerShape(6.dp)
                                                 ) {
                                                     Text(
-                                                        text = "Lowest Price",
-                                                        style = MaterialTheme.typography.labelSmall.copy(
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.Bold
-                                                        ),
-                                                        color = MaterialTheme.colorScheme.primary,
+                                                        text = "${item.displayStore} • ${formatRelativeTime(item.lastTrackedTime)}",
+                                                        style = MaterialTheme.typography.caption.copy(fontSize = 10.sp),
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                     )
                                                 }
+
+                                                if (isLowest) {
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Surface(
+                                                        color = MaterialTheme.colors.primary.copy(alpha = 0.12f),
+                                                        shape = RoundedCornerShape(6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "Lowest Price",
+                                                            style = MaterialTheme.typography.caption.copy(
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Bold
+                                                            ),
+                                                            color = MaterialTheme.colors.primary,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
-                                    }
 
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
 
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = formatPrice(item.newPrice, item.link),
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            color = if (isLowest) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        )
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = formatPrice(item.newPrice, item.link),
+                                                style = MaterialTheme.typography.subtitle1.copy(
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                color = if (isLowest) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface
+                                            )
 
-                                        if (item.link.isNotBlank()) {
-                                            IconButton(
-                                                onClick = {
-                                                    try {
-                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.link))
-                                                        context.startActivity(intent)
-                                                    } catch (_: Exception) {
-                                                    }
-                                                },
-                                                modifier = Modifier.size(32.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                                    contentDescription = "Open product link",
-                                                    modifier = Modifier.size(16.dp)
-                                                )
+                                            if (item.link.isNotBlank()) {
+                                                IconButton(
+                                                    onClick = {
+                                                        try {
+                                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.link))
+                                                            context.startActivity(intent)
+                                                        } catch (_: Exception) {
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                                        contentDescription = "Open product link",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                TrackingRepository.ungroupGroup(group.id)
-                                selectedGroupForDetails = null
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Group split into single products")
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(20.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.CallSplit,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Ungroup")
-                        }
+                            OutlinedButton(
+                                onClick = {
+                                    TrackingRepository.ungroupGroup(group.id)
+                                    selectedGroupForDetails = null
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Group split into single products")
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.CallSplit,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Ungroup")
+                            }
 
-                        Button(
-                            onClick = { selectedGroupForDetails = null },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(20.dp)
-                        ) {
-                            Text("Done")
+                            Button(
+                                onClick = { selectedGroupForDetails = null },
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text("Done")
+                            }
                         }
                     }
                 }
-            }
+            ) {}
         }
     }
 }

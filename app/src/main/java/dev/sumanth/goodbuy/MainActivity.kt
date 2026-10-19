@@ -2,6 +2,7 @@ package dev.sumanth.goodbuy
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -15,8 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -24,23 +25,22 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.Badge
+import androidx.compose.material.BadgedBox
+import androidx.compose.material.Button
+import androidx.compose.material.TopAppBar
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.BottomNavigation
+import androidx.compose.material.BottomNavigationItem
+import androidx.compose.material.Scaffold
+import androidx.compose.material.SnackbarHost
+import androidx.compose.material.SnackbarHostState
+import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,7 +64,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TrackingRepository.init(applicationContext)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+        )
         setContent {
             AppTheme {
                 MainApp()
@@ -73,7 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun MainApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -107,42 +110,41 @@ fun MainApp() {
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (selectedTab == 0) {
                 // Common Top Bar for HomeScreen (Search)
-                CenterAlignedTopAppBar(
+                TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.ShoppingBag,
                                 contentDescription = "GoodBuy Logo",
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = MaterialTheme.colors.primary,
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "GoodBuy",
-                                style = MaterialTheme.typography.titleLarge.copy(
+                                style = MaterialTheme.typography.h6.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colors.onSurface
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                    backgroundColor = MaterialTheme.colors.surface,
+                    contentColor = MaterialTheme.colors.onSurface
                 )
             } else {
                 // Common Top Bar for TrackingScreen
                 if (isSelectionMode) {
-                    CenterAlignedTopAppBar(
+                    TopAppBar(
                         title = {
                             Text(
                                 text = "$totalSelectedCount Selected to Group",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.subtitle1,
                                 fontWeight = FontWeight.Bold
                             )
                         },
@@ -176,7 +178,7 @@ fun MainApp() {
                                 },
                                 enabled = totalSelectedCount >= 2,
                                 modifier = Modifier.padding(end = 8.dp),
-                                shape = RoundedCornerShape(20.dp)
+                                shape = MaterialTheme.shapes.small
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Layers,
@@ -187,24 +189,23 @@ fun MainApp() {
                                 Text("Group")
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
+                        backgroundColor = MaterialTheme.colors.primary,
+                        contentColor = MaterialTheme.colors.onPrimary
                     )
                 } else {
-                    CenterAlignedTopAppBar(
+                    TopAppBar(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.NotificationsActive,
                                     contentDescription = "Price Tracker",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colors.primary,
                                     modifier = Modifier.size(26.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Price Tracker",
-                                    style = MaterialTheme.typography.titleLarge.copy(
+                                    style = MaterialTheme.typography.h6.copy(
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
@@ -216,21 +217,25 @@ fun MainApp() {
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,
                                         contentDescription = "Clear all tracked items",
-                                        tint = MaterialTheme.colorScheme.error
+                                        tint = MaterialTheme.colors.error
                                     )
                                 }
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
+                        backgroundColor = MaterialTheme.colors.surface,
+                        contentColor = MaterialTheme.colors.onSurface
                     )
                 }
             }
         },
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
+            BottomNavigation(
+                backgroundColor = MaterialTheme.colors.surface,
+                contentColor = MaterialTheme.colors.onSurface
+            ) {
+                BottomNavigationItem(
+                    selectedContentColor = MaterialTheme.colors.primaryVariant,
+                    unselectedContentColor = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                     selected = selectedTab == 0,
                     onClick = {
                         if (isSelectionMode) exitSelectionMode()
@@ -245,7 +250,9 @@ fun MainApp() {
                     label = { Text("Search") }
                 )
 
-                NavigationBarItem(
+                BottomNavigationItem(
+                    selectedContentColor = MaterialTheme.colors.primaryVariant,
+                    unselectedContentColor = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                     selected = selectedTab == 1,
                     onClick = {
                         selectedTab = 1
@@ -315,13 +322,13 @@ fun MainApp() {
                 title = {
                     Text(
                         text = "Clear All Tracked Products?",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.subtitle1.copy(fontWeight = FontWeight.Bold)
                     )
                 },
                 text = {
                     Text(
                         text = "Are you sure you want to remove all products and groups from price tracking? This action cannot be undone.",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.body2
                     )
                 },
                 confirmButton = {
@@ -337,7 +344,7 @@ fun MainApp() {
                     ) {
                         Text(
                             text = "Clear All",
-                            color = MaterialTheme.colorScheme.error,
+                            color = MaterialTheme.colors.error,
                             fontWeight = FontWeight.Bold
                         )
                     }
