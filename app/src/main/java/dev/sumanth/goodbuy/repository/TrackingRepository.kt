@@ -2,15 +2,19 @@ package dev.sumanth.goodbuy.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import dev.sumanth.goodbuy.model.Product
 import dev.sumanth.goodbuy.model.TrackedGroup
 import dev.sumanth.goodbuy.scraper.AmazonScraper
 import dev.sumanth.goodbuy.scraper.FlipkartScraper
 import dev.sumanth.goodbuy.scraper.MyntraScraper
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,6 +25,8 @@ object TrackingRepository {
     private const val KEY_PRODUCTS = "tracked_products"
     private const val KEY_GROUPS = "tracked_groups"
     private const val KEY_LAST_REFRESHED_TIME = "last_refreshed_time"
+
+    private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
     private val _trackedProducts = MutableStateFlow<List<Product>>(emptyList())
     val trackedProducts: StateFlow<List<Product>> = _trackedProducts.asStateFlow()
@@ -45,9 +51,9 @@ object TrackingRepository {
     }
 
     fun clearAll() {
-        _trackedProducts.value = emptyList()
-        _trackedGroups.value = emptyList()
-        saveToPrefs()
+        _trackedProducts.update { emptyList() }
+        _trackedGroups.update { emptyList() }
+        saveToPrefsAsync()
     }
 
     suspend fun checkAndRefreshTrackedPrices(
@@ -76,11 +82,10 @@ object TrackingRepository {
         if (currentTracked.isEmpty()) return@withContext 0
 
         var updatedCount = 0
-        val updatedProducts = currentTracked.toMutableList()
+        val updatedMap = mutableMapOf<String, Product>()
         val currentTime = System.currentTimeMillis()
 
-        for (i in updatedProducts.indices) {
-            val product = updatedProducts[i]
+        for (product in currentTracked) {
             try {
                 val singleResult = when {
                     product.displayStore.equals("Amazon", ignoreCase = true) || product.link.contains("amazon", ignoreCase = true) || product.id.startsWith("amazon", ignoreCase = true) -> {
@@ -103,7 +108,7 @@ object TrackingRepository {
                 singleResult.onSuccess { match ->
                     if (match != null && match.newPrice > 0.0) {
                         if (match.newPrice != product.newPrice) {
-                            updatedProducts[i] = product.copy(
+                            updatedMap[product.id] = product.copy(
                                 oldPrice = product.newPrice,
                                 newPrice = match.newPrice,
                                 rating = if (match.rating > 0) match.rating else product.rating,
@@ -121,7 +126,7 @@ object TrackingRepository {
                     searchResult.onSuccess { liveProducts ->
                         val match = liveProducts.find { it.id == product.id || it.link == product.link }
                         if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
-                            updatedProducts[i] = product.copy(
+                            updatedMap[product.id] = product.copy(
                                 oldPrice = product.newPrice,
                                 newPrice = match.newPrice,
                                 lastTrackedTime = currentTime
@@ -133,105 +138,123 @@ object TrackingRepository {
                 }
 
                 if (!productUpdated) {
-                    updatedProducts[i] = updatedProducts[i].copy(lastTrackedTime = currentTime)
+                    updatedMap[product.id] = product.copy(lastTrackedTime = currentTime)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                updatedProducts[i] = updatedProducts[i].copy(lastTrackedTime = currentTime)
+                updatedMap[product.id] = product.copy(lastTrackedTime = currentTime)
             }
         }
 
-        _trackedProducts.value = updatedProducts
-        _lastRefreshedTime.value = currentTime
-        saveToPrefs()
+        _trackedProducts.update { list ->
+            list.map { existing ->
+                updatedMap[existing.id] ?: existing
+            }
+        }
+        _lastRefreshedTime.update { currentTime }
+        saveToPrefsAsync()
         return@withContext updatedCount
     }
 
     fun addTrackedProduct(product: Product) {
-        val current = _trackedProducts.value.toMutableList()
-        if (current.none { it.id == product.id }) {
-            val now = System.currentTimeMillis()
-            val trackedProduct = product.copy(lastTrackedTime = now)
-            current.add(0, trackedProduct)
-            _trackedProducts.value = current
-            if (_lastRefreshedTime.value == 0L) {
-                _lastRefreshedTime.value = now
+        val now = System.currentTimeMillis()
+        var added = false
+        _trackedProducts.update { current ->
+            if (current.none { it.id == product.id }) {
+                added = true
+                val trackedProduct = product.copy(lastTrackedTime = now)
+                listOf(trackedProduct) + current
+            } else {
+                current
             }
-            saveToPrefs()
+        }
+        if (added) {
+            _lastRefreshedTime.update { if (it == 0L) now else it }
+            saveToPrefsAsync()
         }
     }
 
     fun removeTrackedProduct(productId: String) {
-        val currentProducts = _trackedProducts.value.filterNot { it.id == productId }
-        _trackedProducts.value = currentProducts
+        _trackedProducts.update { current ->
+            current.filterNot { it.id == productId }
+        }
 
         // Also remove product from any groups
-        val currentGroups = _trackedGroups.value.mapNotNull { group ->
-            val updatedIds = group.productIds.filterNot { it == productId }
-            if (updatedIds.size >= 2) {
-                group.copy(productIds = updatedIds)
-            } else {
-                null // Disband group if less than 2 products remain
+        _trackedGroups.update { currentGroups ->
+            currentGroups.mapNotNull { group ->
+                val updatedIds = group.productIds.filterNot { it == productId }
+                if (updatedIds.size >= 2) {
+                    group.copy(productIds = updatedIds)
+                } else {
+                    null // Disband group if less than 2 products remain
+                }
             }
         }
-        _trackedGroups.value = currentGroups
-        saveToPrefs()
+        saveToPrefsAsync()
     }
 
     fun groupProducts(selectedProductIds: List<String>, selectedGroupIds: List<String> = emptyList()): TrackedGroup? {
         val allProductIdsToGroup = mutableSetOf<String>()
         allProductIdsToGroup.addAll(selectedProductIds)
 
-        // Merge product IDs from selected existing groups
-        val remainingGroups = _trackedGroups.value.toMutableList()
-        selectedGroupIds.forEach { groupId ->
-            val existingGroup = remainingGroups.find { it.id == groupId }
-            if (existingGroup != null) {
-                allProductIdsToGroup.addAll(existingGroup.productIds)
-                remainingGroups.removeAll { it.id == groupId }
+        var createdGroup: TrackedGroup? = null
+
+        _trackedGroups.update { currentGroups ->
+            val remainingGroups = currentGroups.toMutableList()
+            selectedGroupIds.forEach { groupId ->
+                val existingGroup = remainingGroups.find { it.id == groupId }
+                if (existingGroup != null) {
+                    allProductIdsToGroup.addAll(existingGroup.productIds)
+                    remainingGroups.removeAll { it.id == groupId }
+                }
+            }
+
+            if (allProductIdsToGroup.size < 2) {
+                currentGroups
+            } else {
+                val products = getProductsForIds(allProductIdsToGroup.toList())
+                val firstProductTitle = products.firstOrNull()?.title?.take(25) ?: "Product Group"
+                val derivedGroupName = "$firstProductTitle & more"
+
+                val newGroup = TrackedGroup(
+                    id = UUID.randomUUID().toString(),
+                    name = derivedGroupName,
+                    productIds = allProductIdsToGroup.toList()
+                )
+                createdGroup = newGroup
+                listOf(newGroup) + remainingGroups
             }
         }
 
-        if (allProductIdsToGroup.size < 2) return null
-
-        // Derive group name from first product title
-        val products = getProductsForIds(allProductIdsToGroup.toList())
-        val firstProductTitle = products.firstOrNull()?.title?.take(25) ?: "Product Group"
-        val groupName = "$firstProductTitle & more"
-
-        val newGroup = TrackedGroup(
-            id = UUID.randomUUID().toString(),
-            name = groupName,
-            productIds = allProductIdsToGroup.toList()
-        )
-
-        remainingGroups.add(0, newGroup)
-        _trackedGroups.value = remainingGroups
-        saveToPrefs()
-        return newGroup
+        if (createdGroup != null) {
+            saveToPrefsAsync()
+        }
+        return createdGroup
     }
 
     fun ungroupGroup(groupId: String) {
-        val currentGroups = _trackedGroups.value.filterNot { it.id == groupId }
-        _trackedGroups.value = currentGroups
-        saveToPrefs()
+        _trackedGroups.update { current ->
+            current.filterNot { it.id == groupId }
+        }
+        saveToPrefsAsync()
     }
 
     fun removeProductFromGroup(groupId: String, productId: String) {
-        val currentGroups = _trackedGroups.value.mapNotNull { group ->
-            if (group.id == groupId) {
-                val updatedIds = group.productIds.filterNot { it == productId }
-                if (updatedIds.size >= 2) {
-                    group.copy(productIds = updatedIds)
+        _trackedGroups.update { currentGroups ->
+            currentGroups.mapNotNull { group ->
+                if (group.id == groupId) {
+                    val updatedIds = group.productIds.filterNot { it == productId }
+                    if (updatedIds.size >= 2) {
+                        group.copy(productIds = updatedIds)
+                    } else {
+                        null // Disband group if fewer than 2 products left
+                    }
                 } else {
-                    null // Disband group if fewer than 2 products left
+                    group
                 }
-            } else {
-                group
             }
         }
-        _trackedGroups.value = currentGroups
-        saveToPrefs()
+        saveToPrefsAsync()
     }
 
     fun getProductsForIds(ids: List<String>): List<Product> {
@@ -323,45 +346,51 @@ object TrackingRepository {
         }
     }
 
-    private fun saveToPrefs() {
-        val p = prefs ?: return
-        try {
-            val productsArray = JSONArray()
-            _trackedProducts.value.forEach { product ->
-                val obj = JSONObject().apply {
-                    put("id", product.id)
-                    put("title", product.title)
-                    put("description", product.description)
-                    put("category", product.category)
-                    put("imageUrl", product.imageUrl)
-                    put("oldPrice", product.oldPrice)
-                    put("newPrice", product.newPrice)
-                    put("rating", product.rating)
-                    put("reviewCount", product.reviewCount)
-                    put("isFavorite", product.isFavorite)
-                    put("link", product.link)
-                    put("lastTrackedTime", product.lastTrackedTime)
-                }
-                productsArray.put(obj)
-            }
+    private fun saveToPrefsAsync() {
+        repositoryScope.launch {
+            val p = prefs ?: return@launch
+            try {
+                val products = _trackedProducts.value
+                val groups = _trackedGroups.value
+                val lastRefreshed = _lastRefreshedTime.value
 
-            val groupsArray = JSONArray()
-            _trackedGroups.value.forEach { group ->
-                val obj = JSONObject().apply {
-                    put("id", group.id)
-                    put("name", group.name)
-                    put("productIds", JSONArray(group.productIds))
+                val productsArray = JSONArray()
+                products.forEach { product ->
+                    val obj = JSONObject().apply {
+                        put("id", product.id)
+                        put("title", product.title)
+                        put("description", product.description)
+                        put("category", product.category)
+                        put("imageUrl", product.imageUrl)
+                        put("oldPrice", product.oldPrice)
+                        put("newPrice", product.newPrice)
+                        put("rating", product.rating)
+                        put("reviewCount", product.reviewCount)
+                        put("isFavorite", product.isFavorite)
+                        put("link", product.link)
+                        put("lastTrackedTime", product.lastTrackedTime)
+                    }
+                    productsArray.put(obj)
                 }
-                groupsArray.put(obj)
-            }
 
-            p.edit()
-                .putString(KEY_PRODUCTS, productsArray.toString())
-                .putString(KEY_GROUPS, groupsArray.toString())
-                .putLong(KEY_LAST_REFRESHED_TIME, _lastRefreshedTime.value)
-                .apply()
-        } catch (e: Exception) {
-            e.printStackTrace()
+                val groupsArray = JSONArray()
+                groups.forEach { group ->
+                    val obj = JSONObject().apply {
+                        put("id", group.id)
+                        put("name", group.name)
+                        put("productIds", JSONArray(group.productIds))
+                    }
+                    groupsArray.put(obj)
+                }
+
+                p.edit {
+                    putString(KEY_PRODUCTS, productsArray.toString())
+                    putString(KEY_GROUPS, groupsArray.toString())
+                    putLong(KEY_LAST_REFRESHED_TIME, lastRefreshed)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }
