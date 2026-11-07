@@ -1,8 +1,10 @@
 package dev.sumanth.goodbuy.repository
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.core.content.edit
+import dev.sumanth.goodbuy.db.AppDatabase
+import dev.sumanth.goodbuy.db.PriceHistoryEntity
+import dev.sumanth.goodbuy.db.toDomainModel
+import dev.sumanth.goodbuy.db.toEntity
 import dev.sumanth.goodbuy.model.Product
 import dev.sumanth.goodbuy.model.TrackedGroup
 import dev.sumanth.goodbuy.scraper.AmazonScraper
@@ -10,23 +12,18 @@ import dev.sumanth.goodbuy.scraper.FlipkartScraper
 import dev.sumanth.goodbuy.scraper.MyntraScraper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.UUID
 
 object TrackingRepository {
-    private const val PREFS_NAME = "goodbuy_tracking_prefs"
-    private const val KEY_PRODUCTS = "tracked_products"
-    private const val KEY_GROUPS = "tracked_groups"
-    private const val KEY_LAST_REFRESHED_TIME = "last_refreshed_time"
-
-    private val repositoryScope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private var database: AppDatabase? = null
 
     private val _trackedProducts = MutableStateFlow<List<Product>>(emptyList())
     val trackedProducts: StateFlow<List<Product>> = _trackedProducts.asStateFlow()
@@ -34,227 +31,202 @@ object TrackingRepository {
     private val _trackedGroups = MutableStateFlow<List<TrackedGroup>>(emptyList())
     val trackedGroups: StateFlow<List<TrackedGroup>> = _trackedGroups.asStateFlow()
 
-    private val _lastRefreshedTime = MutableStateFlow<Long>(0L)
+    private val _lastRefreshedTime = MutableStateFlow(0L)
     val lastRefreshedTime: StateFlow<Long> = _lastRefreshedTime.asStateFlow()
 
-    private var prefs: SharedPreferences? = null
-
     fun init(context: Context) {
-        if (prefs != null) return
-        val appContext = context.applicationContext
-        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        loadFromPrefs()
+        if (database != null) return
+        val db = AppDatabase.getDatabase(context.applicationContext)
+        database = db
+
+        scope.launch {
+            db.productDao().getTrackedProducts().collect { _trackedProducts.value = it.map { e -> e.toDomainModel() } }
+        }
+        scope.launch {
+            db.groupDao().getTrackedGroups().collect { _trackedGroups.value = it.map { e -> e.toDomainModel() } }
+        }
     }
 
-    fun isTracked(productId: String): Boolean {
-        return _trackedProducts.value.any { it.id == productId }
-    }
+    fun isTracked(productId: String): Boolean = _trackedProducts.value.any { it.id == productId }
 
     fun clearAll() {
-        _trackedProducts.update { emptyList() }
-        _trackedGroups.update { emptyList() }
-        saveToPrefsAsync()
+        database?.let { db ->
+            scope.launch {
+                db.productDao().deleteAllProducts()
+                db.groupDao().deleteAllGroups()
+                db.priceHistoryDao().deleteAllHistory()
+                _lastRefreshedTime.update { 0L }
+            }
+        } ?: run {
+            _trackedProducts.value = emptyList()
+            _trackedGroups.value = emptyList()
+            _lastRefreshedTime.value = 0L
+        }
     }
 
-    suspend fun checkAndRefreshTrackedPrices(
-        minIntervalMillis: Long = 30 * 60 * 1000L,
-        force: Boolean = false
-    ): Int {
-        val currentTracked = _trackedProducts.value
-        if (currentTracked.isEmpty()) return 0
+    suspend fun checkAndRefreshTrackedPrices(minIntervalMillis: Long = 1800000L, force: Boolean = false): Int {
+        val current = _trackedProducts.value
+        if (current.isEmpty()) return 0
+        val now = System.currentTimeMillis()
+        val last = _lastRefreshedTime.value
+        val oldest = current.minOfOrNull { it.lastTrackedTime } ?: 0L
 
-        val currentTime = System.currentTimeMillis()
-        val lastRefreshed = _lastRefreshedTime.value
-        val oldestTracked = currentTracked.minOfOrNull { it.lastTrackedTime } ?: 0L
-
-        val isStale = force || (lastRefreshed == 0L) ||
-                (currentTime - lastRefreshed >= minIntervalMillis) ||
-                (currentTime - oldestTracked >= minIntervalMillis)
-
-        if (isStale) {
+        if (force || last == 0L || now - last >= minIntervalMillis || now - oldest >= minIntervalMillis) {
             return refreshTrackedPrices()
         }
         return 0
     }
 
     suspend fun refreshTrackedPrices(): Int = withContext(Dispatchers.IO) {
-        val currentTracked = _trackedProducts.value
-        if (currentTracked.isEmpty()) return@withContext 0
+        val db = database ?: return@withContext 0
+        val current = _trackedProducts.value
+        if (current.isEmpty()) return@withContext 0
 
         var updatedCount = 0
-        val updatedMap = mutableMapOf<String, Product>()
-        val currentTime = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
 
-        for (product in currentTracked) {
+        for (product in current) {
             try {
-                val singleResult = when {
-                    product.displayStore.equals("Amazon", ignoreCase = true) || product.link.contains("amazon", ignoreCase = true) || product.id.startsWith("amazon", ignoreCase = true) -> {
+                val result = when {
+                    product.displayStore.equals("Amazon", true) || product.link.contains("amazon", true) || product.id.startsWith("amazon", true) ->
                         AmazonScraper.scrapeAmazonProduct(product.link.ifEmpty { product.id })
-                    }
-                    product.displayStore.equals("Flipkart", ignoreCase = true) || product.link.contains("flipkart", ignoreCase = true) -> {
+                    product.displayStore.equals("Flipkart", true) || product.link.contains("flipkart", true) ->
                         FlipkartScraper.scrapeFlipkartProduct(product.link.ifEmpty { product.id })
-                    }
-                    product.displayStore.equals("Myntra", ignoreCase = true) || product.link.contains("myntra", ignoreCase = true) || product.id.startsWith("myntra", ignoreCase = true) -> {
+                    product.displayStore.equals("Myntra", true) || product.link.contains("myntra", true) || product.id.startsWith("myntra", true) ->
                         MyntraScraper.scrapeMyntraProduct(product.link.ifEmpty { product.id })
-                    }
                     else -> {
-                        val queryTerm = product.title.take(30)
-                        val searchResult = ProductRepository.searchAll(queryTerm)
-                        searchResult.map { list -> list.find { it.id == product.id || it.link == product.link } ?: list.firstOrNull() ?: product }
+                        val search = ProductRepository.searchAll(product.title.take(30))
+                        search.map { list -> list.find { it.id == product.id || it.link == product.link } ?: list.firstOrNull() ?: product }
                     }
                 }
 
-                var productUpdated = false
-                singleResult.onSuccess { match ->
-                    if (match != null && match.newPrice > 0.0) {
-                        if (match.newPrice != product.newPrice) {
-                            updatedMap[product.id] = product.copy(
-                                oldPrice = product.newPrice,
-                                newPrice = match.newPrice,
-                                rating = if (match.rating > 0) match.rating else product.rating,
-                                lastTrackedTime = currentTime
-                            )
-                            updatedCount++
-                            productUpdated = true
-                        }
+                var updated = false
+                result.onSuccess { match ->
+                    if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
+                        val newProd = product.copy(oldPrice = product.newPrice, newPrice = match.newPrice, rating = if (match.rating > 0) match.rating else product.rating, lastTrackedTime = now)
+                        db.productDao().insertProduct(newProd.toEntity())
+                        db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = match.newPrice, timestamp = now))
+                        updatedCount++
+                        updated = true
                     }
                 }
 
-                if (!productUpdated && product.link.isBlank()) {
-                    val queryTerm = product.title.take(30)
-                    val searchResult = ProductRepository.searchAll(queryTerm)
-                    searchResult.onSuccess { liveProducts ->
-                        val match = liveProducts.find { it.id == product.id || it.link == product.link }
+                if (!updated && product.link.isBlank()) {
+                    ProductRepository.searchAll(product.title.take(30)).onSuccess { live ->
+                        val match = live.find { it.id == product.id || it.link == product.link }
                         if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
-                            updatedMap[product.id] = product.copy(
-                                oldPrice = product.newPrice,
-                                newPrice = match.newPrice,
-                                lastTrackedTime = currentTime
-                            )
+                            val newProd = product.copy(oldPrice = product.newPrice, newPrice = match.newPrice, lastTrackedTime = now)
+                            db.productDao().insertProduct(newProd.toEntity())
+                            db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = match.newPrice, timestamp = now))
                             updatedCount++
-                            productUpdated = true
+                            updated = true
                         }
                     }
                 }
 
-                if (!productUpdated) {
-                    updatedMap[product.id] = product.copy(lastTrackedTime = currentTime)
+                if (!updated) {
+                    db.productDao().insertProduct(product.copy(lastTrackedTime = now).toEntity())
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                updatedMap[product.id] = product.copy(lastTrackedTime = currentTime)
+                db.productDao().insertProduct(product.copy(lastTrackedTime = now).toEntity())
             }
         }
-
-        _trackedProducts.update { list ->
-            list.map { existing ->
-                updatedMap[existing.id] ?: existing
-            }
-        }
-        _lastRefreshedTime.update { currentTime }
-        saveToPrefsAsync()
-        return@withContext updatedCount
+        _lastRefreshedTime.update { now }
+        updatedCount
     }
 
     fun addTrackedProduct(product: Product) {
         val now = System.currentTimeMillis()
-        var added = false
-        _trackedProducts.update { current ->
-            if (current.none { it.id == product.id }) {
-                added = true
-                val trackedProduct = product.copy(lastTrackedTime = now)
-                listOf(trackedProduct) + current
-            } else {
-                current
+        val tracked = product.copy(lastTrackedTime = now)
+        database?.let { db ->
+            scope.launch {
+                db.productDao().insertProduct(tracked.toEntity())
+                db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = product.newPrice, timestamp = now))
+                _lastRefreshedTime.update { if (it == 0L) now else it }
             }
-        }
-        if (added) {
+        } ?: run {
+            _trackedProducts.update { it.filterNot { p -> p.id == product.id } + tracked }
             _lastRefreshedTime.update { if (it == 0L) now else it }
-            saveToPrefsAsync()
         }
     }
 
     fun removeTrackedProduct(productId: String) {
-        _trackedProducts.update { current ->
-            current.filterNot { it.id == productId }
-        }
-
-        // Also remove product from any groups
-        _trackedGroups.update { currentGroups ->
-            currentGroups.mapNotNull { group ->
-                val updatedIds = group.productIds.filterNot { it == productId }
-                if (updatedIds.size >= 2) {
-                    group.copy(productIds = updatedIds)
-                } else {
-                    null // Disband group if less than 2 products remain
+        database?.let { db ->
+            scope.launch {
+                db.productDao().deleteProductById(productId)
+                db.priceHistoryDao().deleteHistoryForProduct(productId)
+                db.groupDao().getTrackedGroupsList().map { it.toDomainModel() }.forEach { group ->
+                    val updatedIds = group.productIds.filterNot { it == productId }
+                    if (updatedIds.size >= 2) {
+                        db.groupDao().insertGroup(group.copy(productIds = updatedIds).toEntity())
+                    } else {
+                        db.groupDao().deleteGroupById(group.id)
+                    }
+                }
+            }
+        } ?: run {
+            _trackedProducts.update { current -> current.filterNot { it.id == productId } }
+            _trackedGroups.update { groups ->
+                groups.mapNotNull { group ->
+                    val updatedIds = group.productIds.filterNot { it == productId }
+                    if (updatedIds.size >= 2) group.copy(productIds = updatedIds) else null
                 }
             }
         }
-        saveToPrefsAsync()
     }
 
     fun groupProducts(selectedProductIds: List<String>, selectedGroupIds: List<String> = emptyList()): TrackedGroup? {
-        val allProductIdsToGroup = mutableSetOf<String>()
-        allProductIdsToGroup.addAll(selectedProductIds)
-
-        var createdGroup: TrackedGroup? = null
-
-        _trackedGroups.update { currentGroups ->
-            val remainingGroups = currentGroups.toMutableList()
-            selectedGroupIds.forEach { groupId ->
-                val existingGroup = remainingGroups.find { it.id == groupId }
-                if (existingGroup != null) {
-                    allProductIdsToGroup.addAll(existingGroup.productIds)
-                    remainingGroups.removeAll { it.id == groupId }
-                }
-            }
-
-            if (allProductIdsToGroup.size < 2) {
-                currentGroups
-            } else {
-                val products = getProductsForIds(allProductIdsToGroup.toList())
-                val firstProductTitle = products.firstOrNull()?.title?.take(25) ?: "Product Group"
-                val derivedGroupName = "$firstProductTitle & more"
-
-                val newGroup = TrackedGroup(
-                    id = UUID.randomUUID().toString(),
-                    name = derivedGroupName,
-                    productIds = allProductIdsToGroup.toList()
-                )
-                createdGroup = newGroup
-                listOf(newGroup) + remainingGroups
+        val allIds = selectedProductIds.toMutableSet()
+        val currentGroups = _trackedGroups.value.toMutableList()
+        selectedGroupIds.forEach { gId ->
+            currentGroups.find { it.id == gId }?.let { existing ->
+                allIds.addAll(existing.productIds)
+                currentGroups.removeAll { it.id == gId }
+                database?.let { db -> scope.launch { db.groupDao().deleteGroupById(gId) } }
             }
         }
 
-        if (createdGroup != null) {
-            saveToPrefsAsync()
+        if (allIds.size < 2) return null
+        val products = getProductsForIds(allIds.toList())
+        val name = "${products.firstOrNull()?.title?.take(25) ?: "Product Group"} & more"
+        val newGroup = TrackedGroup(id = UUID.randomUUID().toString(), name = name, productIds = allIds.toList())
+
+        database?.let { db ->
+            scope.launch { db.groupDao().insertGroup(newGroup.toEntity()) }
+        } ?: run {
+            _trackedGroups.update { groups -> groups.filterNot { it.id in selectedGroupIds } + newGroup }
         }
-        return createdGroup
+        return newGroup
     }
 
     fun ungroupGroup(groupId: String) {
-        _trackedGroups.update { current ->
-            current.filterNot { it.id == groupId }
-        }
-        saveToPrefsAsync()
+        database?.let { db -> scope.launch { db.groupDao().deleteGroupById(groupId) } }
+            ?: run { _trackedGroups.update { groups -> groups.filterNot { it.id == groupId } } }
     }
 
     fun removeProductFromGroup(groupId: String, productId: String) {
-        _trackedGroups.update { currentGroups ->
-            currentGroups.mapNotNull { group ->
-                if (group.id == groupId) {
+        database?.let { db ->
+            scope.launch {
+                db.groupDao().getTrackedGroupsList().find { it.id == groupId }?.toDomainModel()?.let { group ->
                     val updatedIds = group.productIds.filterNot { it == productId }
                     if (updatedIds.size >= 2) {
-                        group.copy(productIds = updatedIds)
+                        db.groupDao().insertGroup(group.copy(productIds = updatedIds).toEntity())
                     } else {
-                        null // Disband group if fewer than 2 products left
+                        db.groupDao().deleteGroupById(groupId)
                     }
-                } else {
-                    group
+                }
+            }
+        } ?: run {
+            _trackedGroups.update { groups ->
+                groups.mapNotNull { group ->
+                    if (group.id == groupId) {
+                        val updatedIds = group.productIds.filterNot { it == productId }
+                        if (updatedIds.size >= 2) group.copy(productIds = updatedIds) else null
+                    } else group
                 }
             }
         }
-        saveToPrefsAsync()
     }
 
     fun getProductsForIds(ids: List<String>): List<Product> {
@@ -262,135 +234,18 @@ object TrackingRepository {
         return _trackedProducts.value.filter { it.id in idSet }
     }
 
-    fun getProductsForGroup(group: TrackedGroup): List<Product> {
-        return getProductsForIds(group.productIds)
-    }
+    fun getProductsForGroup(group: TrackedGroup): List<Product> = getProductsForIds(group.productIds)
 
-    fun getBestProductForGroup(group: TrackedGroup): Product? {
-        val products = getProductsForGroup(group)
-        return products.minByOrNull { it.newPrice }
-    }
+    fun getBestProductForGroup(group: TrackedGroup): Product? = getProductsForGroup(group).minByOrNull { it.newPrice }
 
-    fun getLeastPriceForGroup(group: TrackedGroup): Double? {
-        return getBestProductForGroup(group)?.newPrice
-    }
+    fun getLeastPriceForGroup(group: TrackedGroup): Double? = getBestProductForGroup(group)?.newPrice
 
-    /**
-     * Returns products that are NOT part of any group yet.
-     */
     fun getUngroupedTrackedProducts(): List<Product> {
-        val groupedProductIds = _trackedGroups.value.flatMap { it.productIds }.toSet()
-        return _trackedProducts.value.filterNot { it.id in groupedProductIds }
+        val groupedIds = _trackedGroups.value.flatMap { it.productIds }.toSet()
+        return _trackedProducts.value.filterNot { it.id in groupedIds }
     }
 
-    private fun loadFromPrefs() {
-        val p = prefs ?: return
-        _lastRefreshedTime.value = p.getLong(KEY_LAST_REFRESHED_TIME, 0L)
-        val productsJson = p.getString(KEY_PRODUCTS, null)
-        val groupsJson = p.getString(KEY_GROUPS, null)
-
-        if (!productsJson.isNullOrEmpty()) {
-            try {
-                val jsonArray = JSONArray(productsJson)
-                val productList = mutableListOf<Product>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    productList.add(
-                        Product(
-                            id = obj.optString("id"),
-                            title = obj.optString("title"),
-                            description = obj.optString("description"),
-                            category = obj.optString("category"),
-                            imageUrl = obj.optString("imageUrl"),
-                            oldPrice = obj.optDouble("oldPrice", 0.0),
-                            newPrice = obj.optDouble("newPrice", 0.0),
-                            rating = obj.optDouble("rating", 0.0),
-                            reviewCount = obj.optInt("reviewCount", 0),
-                            isFavorite = obj.optBoolean("isFavorite", false),
-                            link = obj.optString("link"),
-                            lastTrackedTime = obj.optLong("lastTrackedTime", System.currentTimeMillis())
-                        )
-                    )
-                }
-                _trackedProducts.value = productList
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        if (!groupsJson.isNullOrEmpty()) {
-            try {
-                val jsonArray = JSONArray(groupsJson)
-                val groupList = mutableListOf<TrackedGroup>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    val pIdsArray = obj.optJSONArray("productIds")
-                    val pIds = mutableListOf<String>()
-                    if (pIdsArray != null) {
-                        for (j in 0 until pIdsArray.length()) {
-                            pIds.add(pIdsArray.getString(j))
-                        }
-                    }
-                    groupList.add(
-                        TrackedGroup(
-                            id = obj.optString("id"),
-                            name = obj.optString("name"),
-                            productIds = pIds
-                        )
-                    )
-                }
-                _trackedGroups.value = groupList
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun saveToPrefsAsync() {
-        repositoryScope.launch {
-            val p = prefs ?: return@launch
-            try {
-                val products = _trackedProducts.value
-                val groups = _trackedGroups.value
-                val lastRefreshed = _lastRefreshedTime.value
-
-                val productsArray = JSONArray()
-                products.forEach { product ->
-                    val obj = JSONObject().apply {
-                        put("id", product.id)
-                        put("title", product.title)
-                        put("description", product.description)
-                        put("category", product.category)
-                        put("imageUrl", product.imageUrl)
-                        put("oldPrice", product.oldPrice)
-                        put("newPrice", product.newPrice)
-                        put("rating", product.rating)
-                        put("reviewCount", product.reviewCount)
-                        put("isFavorite", product.isFavorite)
-                        put("link", product.link)
-                        put("lastTrackedTime", product.lastTrackedTime)
-                    }
-                    productsArray.put(obj)
-                }
-
-                val groupsArray = JSONArray()
-                groups.forEach { group ->
-                    val obj = JSONObject().apply {
-                        put("id", group.id)
-                        put("name", group.name)
-                        put("productIds", JSONArray(group.productIds))
-                    }
-                    groupsArray.put(obj)
-                }
-
-                p.edit {
-                    putString(KEY_PRODUCTS, productsArray.toString())
-                    putString(KEY_GROUPS, groupsArray.toString())
-                    putLong(KEY_LAST_REFRESHED_TIME, lastRefreshed)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+    fun getPriceHistory(productId: String): Flow<List<PriceHistoryEntity>> {
+        return database?.priceHistoryDao()?.getHistoryForProduct(productId) ?: error("Database not initialized")
     }
 }
