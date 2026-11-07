@@ -1,6 +1,11 @@
 package dev.sumanth.goodbuy.repository
 
 import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import dev.sumanth.goodbuy.db.AppDatabase
 import dev.sumanth.goodbuy.db.PriceHistoryEntity
 import dev.sumanth.goodbuy.db.toDomainModel
@@ -10,6 +15,8 @@ import dev.sumanth.goodbuy.model.TrackedGroup
 import dev.sumanth.goodbuy.scraper.AmazonScraper
 import dev.sumanth.goodbuy.scraper.FlipkartScraper
 import dev.sumanth.goodbuy.scraper.MyntraScraper
+import dev.sumanth.goodbuy.util.NotificationHelper
+import dev.sumanth.goodbuy.worker.PriceCheckWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,10 +27,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 object TrackingRepository {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var database: AppDatabase? = null
+    private var appContextRef: Context? = null
 
     private val _trackedProducts = MutableStateFlow<List<Product>>(emptyList())
     val trackedProducts: StateFlow<List<Product>> = _trackedProducts.asStateFlow()
@@ -35,9 +44,16 @@ object TrackingRepository {
     val lastRefreshedTime: StateFlow<Long> = _lastRefreshedTime.asStateFlow()
 
     fun init(context: Context) {
-        if (database != null) return
-        val db = AppDatabase.getDatabase(context.applicationContext)
+        val appContext = context.applicationContext
+        appContextRef = appContext
+        if (database != null) {
+            schedulePriceCheck(appContext)
+            return
+        }
+        val db = AppDatabase.getDatabase(appContext)
         database = db
+
+        schedulePriceCheck(appContext)
 
         scope.launch {
             db.productDao().getTrackedProducts().collect { _trackedProducts.value = it.map { e -> e.toDomainModel() } }
@@ -45,6 +61,24 @@ object TrackingRepository {
         scope.launch {
             db.groupDao().getTrackedGroups().collect { _trackedGroups.value = it.map { e -> e.toDomainModel() } }
         }
+    }
+
+    private fun schedulePriceCheck(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val periodicRequest = PeriodicWorkRequestBuilder<PriceCheckWorker>(
+            30, TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "GoodBuyPriceCheckWork",
+            ExistingPeriodicWorkPolicy.KEEP,
+            periodicRequest
+        )
     }
 
     fun isTracked(productId: String): Boolean = _trackedProducts.value.any { it.id == productId }
@@ -103,11 +137,19 @@ object TrackingRepository {
                 var updated = false
                 result.onSuccess { match ->
                     if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
-                        val newProd = product.copy(oldPrice = product.newPrice, newPrice = match.newPrice, rating = if (match.rating > 0) match.rating else product.rating, lastTrackedTime = now)
+                        val oldPrice = product.newPrice
+                        val newPrice = match.newPrice
+                        val newProd = product.copy(oldPrice = oldPrice, newPrice = newPrice, rating = if (match.rating > 0) match.rating else product.rating, lastTrackedTime = now)
                         db.productDao().insertProduct(newProd.toEntity())
-                        db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = match.newPrice, timestamp = now))
+                        db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = newPrice, timestamp = now))
                         updatedCount++
                         updated = true
+
+                        if (newPrice < oldPrice) {
+                            appContextRef?.let { ctx ->
+                                NotificationHelper.showPriceDropNotification(ctx, product.title, oldPrice, newPrice, product.id)
+                            }
+                        }
                     }
                 }
 
@@ -115,11 +157,19 @@ object TrackingRepository {
                     ProductRepository.searchAll(product.title.take(30)).onSuccess { live ->
                         val match = live.find { it.id == product.id || it.link == product.link }
                         if (match != null && match.newPrice > 0.0 && match.newPrice != product.newPrice) {
-                            val newProd = product.copy(oldPrice = product.newPrice, newPrice = match.newPrice, lastTrackedTime = now)
+                            val oldPrice = product.newPrice
+                            val newPrice = match.newPrice
+                            val newProd = product.copy(oldPrice = oldPrice, newPrice = newPrice, lastTrackedTime = now)
                             db.productDao().insertProduct(newProd.toEntity())
-                            db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = match.newPrice, timestamp = now))
+                            db.priceHistoryDao().insertPriceHistory(PriceHistoryEntity(productId = product.id, price = newPrice, timestamp = now))
                             updatedCount++
                             updated = true
+
+                            if (newPrice < oldPrice) {
+                                appContextRef?.let { ctx ->
+                                    NotificationHelper.showPriceDropNotification(ctx, product.title, oldPrice, newPrice, product.id)
+                                }
+                            }
                         }
                     }
                 }
