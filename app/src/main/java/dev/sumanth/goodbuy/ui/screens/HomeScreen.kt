@@ -28,18 +28,18 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.FilterChip
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.LinearProgressIndicator
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.OutlinedTextField
-import androidx.compose.material.TextFieldDefaults
-import androidx.compose.material.SnackbarHostState
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -58,7 +58,6 @@ import dev.sumanth.goodbuy.ui.components.ProductCard
 import dev.sumanth.goodbuy.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -104,7 +103,7 @@ fun HomeScreen(
                 placeholder = {
                     Text(
                         text = "Search Flipkart, Amazon & Myntra...",
-                        style = MaterialTheme.typography.body2
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 },
                 leadingIcon = {
@@ -127,9 +126,9 @@ fun HomeScreen(
                 shape = MaterialTheme.shapes.small,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { performSearch() }),
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = MaterialTheme.colors.primary,
-                    unfocusedBorderColor = MaterialTheme.colors.onSurface.copy(alpha = 0.38f)
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
             )
 
@@ -140,8 +139,8 @@ fun HomeScreen(
                 onClick = performSearch,
                 modifier = Modifier.size(52.dp),
                 shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colors.primary,
-                contentColor = MaterialTheme.colors.onPrimary
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -164,7 +163,8 @@ fun HomeScreen(
                 FilterChip(
                     selected = selectedStore == store,
                     onClick = { homeViewModel.selectStore(store) },
-                ) { Text(store) }
+                    label = { Text(store) }
+                )
             }
         }
 
@@ -183,8 +183,8 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Scraping live products from Flipkart, Amazon & Myntra...",
-                    style = MaterialTheme.typography.caption,
-                    color = MaterialTheme.colors.primary
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -201,15 +201,15 @@ fun HomeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "${filteredProductList.size} of ${rawProductList.size} Products",
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         fontWeight = FontWeight.Medium
                     )
 
                     if (isScrapedData) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
-                            color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
@@ -219,14 +219,14 @@ fun HomeScreen(
                                 Icon(
                                     imageVector = Icons.Default.CloudDownload,
                                     contentDescription = "Flipkart, Amazon & Myntra Live",
-                                    tint = MaterialTheme.colors.onSurface,
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Flipkart, Amazon & Myntra Live",
-                                    style = MaterialTheme.typography.caption,
-                                    color = MaterialTheme.colors.onSurface,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -239,7 +239,7 @@ fun HomeScreen(
                 ) {
                     Text(
                         text = "Clear Results",
-                        style = MaterialTheme.typography.caption
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
@@ -261,21 +261,21 @@ fun HomeScreen(
                         imageVector = if (searchError != null) Icons.Default.SearchOff else Icons.Default.Search,
                         contentDescription = "Search Products",
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colors.primary.copy(alpha = 0.7f)
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = if (searchError != null) "No results found" else "Search for products",
-                        style = MaterialTheme.typography.subtitle1,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colors.onSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = searchError
                             ?: "Enter product name above (e.g. 'laptop', 'shirt', 'headphones') to scrape live results from Flipkart, Amazon & Myntra.",
-                        style = MaterialTheme.typography.body2,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center
                     )
                 }
@@ -289,8 +289,8 @@ fun HomeScreen(
             ) {
                 Text(
                     text = "No products found for store '$selectedStore'",
-                    style = MaterialTheme.typography.subtitle1,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center
                 )
             }

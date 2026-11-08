@@ -1,40 +1,89 @@
 package dev.sumanth.goodbuy.ui.theme
 
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Shapes
-import androidx.compose.material.lightColors
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import com.example.compose.backgroundLight
+import com.example.compose.errorContainerLight
+import com.example.compose.errorLight
+import com.example.compose.inverseOnSurfaceLight
+import com.example.compose.inversePrimaryLight
+import com.example.compose.inverseSurfaceLight
+import com.example.compose.onBackgroundLight
+import com.example.compose.onErrorContainerLight
+import com.example.compose.onErrorLight
+import com.example.compose.onPrimaryContainerLight
+import com.example.compose.onPrimaryLight
+import com.example.compose.onSecondaryContainerLight
+import com.example.compose.onSecondaryLight
+import com.example.compose.onSurfaceLight
+import com.example.compose.onSurfaceVariantLight
+import com.example.compose.onTertiaryContainerLight
+import com.example.compose.onTertiaryLight
+import com.example.compose.outlineLight
+import com.example.compose.outlineVariantLight
+import com.example.compose.primaryContainerLight
+import com.example.compose.primaryLight
+import com.example.compose.scrimLight
+import com.example.compose.secondaryContainerLight
+import com.example.compose.secondaryLight
+import com.example.compose.surfaceBrightLight
+import com.example.compose.surfaceContainerHighLight
+import com.example.compose.surfaceContainerHighestLight
+import com.example.compose.surfaceContainerLight
+import com.example.compose.surfaceContainerLowLight
+import com.example.compose.surfaceContainerLowestLight
+import com.example.compose.surfaceDimLight
+import com.example.compose.surfaceLight
+import com.example.compose.surfaceVariantLight
+import com.example.compose.tertiaryContainerLight
+import com.example.compose.tertiaryLight
 
-private val LightColors = lightColors(
-  primary = Color(0xFFAB81FF),
-  primaryVariant = Color(0xFF6740A8),
-  secondary = Color(0xFF286A60),
-  secondaryVariant = Color(0xFF1C5048),
-  background = Color(0xFFFAFAFA),
-  surface = Color.White,
-  error = Color(0xFFB00020),
-  onPrimary = Color(0xFF211333),
-  onSecondary = Color.White,
-  onBackground = Color(0xFF202124),
-  onSurface = Color(0xFF202124),
-  onError = Color.White
-)
-
-private val AppShapes = Shapes(
-  small = RoundedCornerShape(4.dp),
-  medium = RoundedCornerShape(8.dp),
-  large = RoundedCornerShape(8.dp)
+private val lightScheme = lightColorScheme(
+    primary = primaryLight,
+    onPrimary = onPrimaryLight,
+    primaryContainer = primaryContainerLight,
+    onPrimaryContainer = onPrimaryContainerLight,
+    secondary = secondaryLight,
+    onSecondary = onSecondaryLight,
+    secondaryContainer = secondaryContainerLight,
+    onSecondaryContainer = onSecondaryContainerLight,
+    tertiary = tertiaryLight,
+    onTertiary = onTertiaryLight,
+    tertiaryContainer = tertiaryContainerLight,
+    onTertiaryContainer = onTertiaryContainerLight,
+    error = errorLight,
+    onError = onErrorLight,
+    errorContainer = errorContainerLight,
+    onErrorContainer = onErrorContainerLight,
+    background = backgroundLight,
+    onBackground = onBackgroundLight,
+    surface = surfaceLight,
+    onSurface = onSurfaceLight,
+    surfaceVariant = surfaceVariantLight,
+    onSurfaceVariant = onSurfaceVariantLight,
+    outline = outlineLight,
+    outlineVariant = outlineVariantLight,
+    scrim = scrimLight,
+    inverseSurface = inverseSurfaceLight,
+    inverseOnSurface = inverseOnSurfaceLight,
+    inversePrimary = inversePrimaryLight,
+    surfaceDim = surfaceDimLight,
+    surfaceBright = surfaceBrightLight,
+    surfaceContainerLowest = surfaceContainerLowestLight,
+    surfaceContainerLow = surfaceContainerLowLight,
+    surfaceContainer = surfaceContainerLight,
+    surfaceContainerHigh = surfaceContainerHighLight,
+    surfaceContainerHighest = surfaceContainerHighestLight,
 )
 
 @Composable
-fun AppTheme(content: @Composable () -> Unit) {
+fun AppTheme(
+    content: @Composable () -> Unit
+) {
   MaterialTheme(
-    colors = LightColors,
+    colorScheme = lightScheme,
     typography = AppTypography,
-    shapes = AppShapes,
     content = content
   )
 }

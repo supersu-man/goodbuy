@@ -36,22 +36,19 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.Button
-import androidx.compose.material.Card
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.ModalBottomSheetLayout
-import androidx.compose.material.ModalBottomSheetValue
-import androidx.compose.material.OutlinedButton
-import androidx.compose.material.SnackbarHostState
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.material.rememberModalBottomSheetState
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,7 +74,7 @@ import dev.sumanth.goodbuy.ui.components.formatRelativeTime
 import dev.sumanth.goodbuy.ui.viewmodel.TrackingViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun TrackingScreen(
     modifier: Modifier = Modifier,
@@ -118,13 +115,10 @@ fun TrackingScreen(
         trackingViewModel.exitSelectionMode()
     }
 
-    val refreshState = rememberPullRefreshState(
-        refreshing = isRefreshingPrices,
-        onRefresh = { trackingViewModel.refreshPrices() }
-    )
-
-    Box(
-        modifier = modifier.fillMaxSize().pullRefresh(refreshState)
+    PullToRefreshBox(
+        isRefreshing = isRefreshingPrices,
+        onRefresh = { trackingViewModel.refreshPrices() },
+        modifier = modifier.fillMaxSize()
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -132,7 +126,7 @@ fun TrackingScreen(
             // Top Helper Hint Bar - Always visible when items exist (even during selection mode)
             if (ungroupedProducts.isNotEmpty() || trackedGroups.isNotEmpty()) {
                 Surface(
-                    color = MaterialTheme.colors.secondary.copy(alpha = 0.06f),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.06f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -145,7 +139,7 @@ fun TrackingScreen(
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = MaterialTheme.colors.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -156,18 +150,18 @@ fun TrackingScreen(
                                 } else {
                                     "Hold (long-press) products to select and group identical items."
                                 },
-                                style = MaterialTheme.typography.caption,
-                                color = MaterialTheme.colors.onSurface
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             if (!isSelectionMode && lastRefreshedTime > 0L) {
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Last checked: ${formatRelativeTime(lastRefreshedTime)} • Auto-refreshes if >30m old",
-                                    style = MaterialTheme.typography.caption.copy(
+                                    style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium
                                     ),
-                                    color = MaterialTheme.colors.primary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -191,20 +185,20 @@ fun TrackingScreen(
                             imageVector = Icons.Default.NotificationsActive,
                             contentDescription = "No Tracked Products",
                             modifier = Modifier.size(72.dp),
-                            tint = MaterialTheme.colors.primary.copy(alpha = 0.6f)
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "No Tracked Products Yet",
-                            style = MaterialTheme.typography.subtitle1,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colors.onSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Search for products on Flipkart & Amazon from the Search tab and tap 'Track' to compare and track prices here.",
-                            style = MaterialTheme.typography.body2,
-                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(20.dp))
@@ -296,286 +290,276 @@ fun TrackingScreen(
                 }
             }
         }
+    }
 
-        PullRefreshIndicator(
-            refreshing = isRefreshingPrices,
-            state = refreshState,
-            modifier = Modifier.align(Alignment.TopCenter),
-            backgroundColor = MaterialTheme.colors.surface,
-            contentColor = MaterialTheme.colors.primaryVariant
-        )
+    // Group Details Bottom Sheet
+    if (selectedGroupForDetails != null) {
+        val group = selectedGroupForDetails
+        val products = uiState.productsForGroup(group)
+        val bestProduct = products.minByOrNull { it.newPrice }
 
-        // Group Details Bottom Sheet
-        if (selectedGroupForDetails != null) {
-            val group = selectedGroupForDetails
-            val products = uiState.productsForGroup(group)
-            val bestProduct = products.minByOrNull { it.newPrice }
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-            val sheetState = rememberModalBottomSheetState(
-                initialValue = ModalBottomSheetValue.Expanded,
-                skipHalfExpanded = true
-            )
-
-            LaunchedEffect(sheetState.currentValue) {
-                if (sheetState.currentValue == ModalBottomSheetValue.Hidden) {
+        BackHandler {
+            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                if (!sheetState.isVisible) {
                     trackingViewModel.dismissGroupDetails()
                 }
             }
-            BackHandler {
-                scope.launch { sheetState.hide() }
-            }
+        }
 
-            ModalBottomSheetLayout(
-                sheetState = sheetState,
-                sheetShape = MaterialTheme.shapes.large,
-                modifier = Modifier.fillMaxSize(),
-                sheetContent = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 24.dp)
+        ModalBottomSheet(
+            onDismissRequest = { trackingViewModel.dismissGroupDetails() },
+            sheetState = sheetState,
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = group.name.ifBlank { "Grouped Products" },
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        Text(
+                            text = "${products.size} Products Grouped",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+
+                    IconButton(onClick = trackingViewModel::dismissGroupDetails) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Least Price Highlight Card
+                if (bestProduct != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = group.name.ifBlank { "Grouped Products" },
-                                    style = MaterialTheme.typography.h6.copy(
-                                        fontWeight = FontWeight.Bold
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocalOffer,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "LEAST CURRENT PRICE DEAL",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "${products.size} Products Grouped",
-                                    style = MaterialTheme.typography.body2,
-                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                    text = formatPrice(bestProduct.newPrice, bestProduct.link),
+                                    style = MaterialTheme.typography.headlineLarge.copy(
+                                        fontWeight = FontWeight.ExtraBold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
 
-                            IconButton(onClick = trackingViewModel::dismissGroupDetails) {
-                                Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Least Price Highlight Card
-                        if (bestProduct != null) {
                             Surface(
-                                color = MaterialTheme.colors.primary.copy(alpha = 0.12f),
-                                shape = MaterialTheme.shapes.medium,
-                                modifier = Modifier.fillMaxWidth()
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.LocalOffer,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colors.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "LEAST CURRENT PRICE DEAL",
-                                                style = MaterialTheme.typography.caption.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    letterSpacing = 0.5.sp
-                                                ),
-                                                color = MaterialTheme.colors.primary
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = formatPrice(bestProduct.newPrice, bestProduct.link),
-                                            style = MaterialTheme.typography.h4.copy(
-                                                fontWeight = FontWeight.ExtraBold
-                                            ),
-                                            color = MaterialTheme.colors.onSurface
-                                        )
-                                    }
-
-                                    Surface(
-                                        color = MaterialTheme.colors.primary,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(
-                                            text = "Best on ${bestProduct.displayStore}",
-                                            color = MaterialTheme.colors.onPrimary,
-                                            style = MaterialTheme.typography.caption.copy(
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = "Group Products Comparison",
-                            style = MaterialTheme.typography.subtitle2,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colors.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(260.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(products, key = { it.id }) { item ->
-                                val isLowest = bestProduct != null && item.id == bestProduct.id
-
-                                Card(
-                                    shape = MaterialTheme.shapes.medium,
-                                    elevation = 2.dp,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AsyncImage(
-                                            model = item.imageUrl,
-                                            contentDescription = item.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(56.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(MaterialTheme.colors.onSurface.copy(alpha = 0.06f))
-                                        )
-
-                                        Spacer(modifier = Modifier.width(10.dp))
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = item.title,
-                                                style = MaterialTheme.typography.body2.copy(
-                                                    fontWeight = FontWeight.SemiBold
-                                                ),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-
-                                            Spacer(modifier = Modifier.height(2.dp))
-
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Surface(
-                                                    color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
-                                                    shape = RoundedCornerShape(6.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "${item.displayStore} • ${formatRelativeTime(item.lastTrackedTime)}",
-                                                        style = MaterialTheme.typography.caption.copy(fontSize = 10.sp),
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-
-                                                if (isLowest) {
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Surface(
-                                                        color = MaterialTheme.colors.primary.copy(alpha = 0.12f),
-                                                        shape = RoundedCornerShape(6.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "Lowest Price",
-                                                            style = MaterialTheme.typography.caption.copy(
-                                                                fontSize = 10.sp,
-                                                                fontWeight = FontWeight.Bold
-                                                            ),
-                                                            color = MaterialTheme.colors.primary,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.width(8.dp))
-
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = formatPrice(item.newPrice, item.link),
-                                                style = MaterialTheme.typography.subtitle1.copy(
-                                                    fontWeight = FontWeight.Bold
-                                                ),
-                                                color = if (isLowest) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface
-                                            )
-
-                                            if (item.link.isNotBlank()) {
-                                                IconButton(
-                                                    onClick = {
-                                                        try {
-                                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.link))
-                                                            context.startActivity(intent)
-                                                        } catch (_: Exception) {
-                                                        }
-                                                    },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                                        contentDescription = "Open product link",
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    trackingViewModel.ungroup(group.id)
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.CallSplit,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
+                                Text(
+                                    text = "Best on ${bestProduct.displayStore}",
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Ungroup")
-                            }
-
-                            Button(
-                                onClick = trackingViewModel::dismissGroupDetails,
-                                modifier = Modifier.weight(1f),
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Text("Done")
                             }
                         }
                     }
                 }
-            ) {}
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Group Products Comparison",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(260.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(products, key = { it.id }) { item ->
+                        val isLowest = bestProduct != null && item.id == bestProduct.id
+
+                        Card(
+                            shape = MaterialTheme.shapes.medium,
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncImage(
+                                    model = item.imageUrl,
+                                    contentDescription = item.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                )
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.title,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "${item.displayStore} • ${formatRelativeTime(item.lastTrackedTime)}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+
+                                        if (isLowest) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Lowest Price",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = formatPrice(item.newPrice, item.link),
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = if (isLowest) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+
+                                    if (item.link.isNotBlank()) {
+                                        IconButton(
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.link))
+                                                    context.startActivity(intent)
+                                                } catch (_: Exception) {
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                                contentDescription = "Open product link",
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            trackingViewModel.ungroup(group.id)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.CallSplit,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Ungroup")
+                    }
+
+                    Button(
+                        onClick = trackingViewModel::dismissGroupDetails,
+                        modifier = Modifier.weight(1f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text("Done")
+                    }
+                }
+            }
         }
     }
 }

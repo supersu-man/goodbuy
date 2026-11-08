@@ -23,12 +23,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.Card
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,13 +63,15 @@ fun TrackedGroupCard(
 
     val storesIncluded = groupedProducts.map { it.displayStore }.distinct().joinToString(" & ")
 
-    val borderColor = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.primary.copy(alpha = 0.5f)
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
 
     Card(
         shape = MaterialTheme.shapes.medium,
-        backgroundColor = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f)
-            else MaterialTheme.colors.surface,
-        elevation = 2.dp,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
             .fillMaxWidth()
             .border(
@@ -89,7 +92,7 @@ fun TrackedGroupCard(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                    .background(MaterialTheme.colors.onSurface.copy(alpha = 0.06f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
             ) {
                 if (primaryProduct != null) {
                     AsyncImage(
@@ -102,7 +105,7 @@ fun TrackedGroupCard(
 
                 // Group Badge Overlay (Top Left)
                 Surface(
-                    color = MaterialTheme.colors.primary,
+                    color = MaterialTheme.colorScheme.primary,
                     shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 4.dp),
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
@@ -113,14 +116,14 @@ fun TrackedGroupCard(
                         Icon(
                             imageVector = Icons.Default.Layers,
                             contentDescription = null,
-                            tint = MaterialTheme.colors.onPrimary,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "${groupedProducts.size} Grouped",
-                            color = MaterialTheme.colors.onPrimary,
-                            style = MaterialTheme.typography.caption.copy(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp
                             )
@@ -130,14 +133,14 @@ fun TrackedGroupCard(
 
                 // Included Stores Badge (Bottom Left)
                 Surface(
-                    color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(topEnd = 4.dp, bottomStart = 8.dp),
                     modifier = Modifier.align(Alignment.BottomStart)
                 ) {
                     Text(
                         text = storesIncluded,
-                        color = MaterialTheme.colors.onSurface,
-                        style = MaterialTheme.typography.caption.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp
                         ),
@@ -153,7 +156,7 @@ fun TrackedGroupCard(
                             .padding(8.dp)
                             .size(28.dp)
                             .background(
-                                color = MaterialTheme.colors.surface.copy(alpha = 0.9f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -161,7 +164,7 @@ fun TrackedGroupCard(
                         Icon(
                             imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                             contentDescription = if (isSelected) "Selected" else "Not Selected",
-                            tint = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -173,14 +176,14 @@ fun TrackedGroupCard(
                             .padding(6.dp)
                             .size(32.dp)
                             .background(
-                                color = MaterialTheme.colors.surface.copy(alpha = 0.85f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
                                 shape = CircleShape
                             )
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.CallSplit,
                             contentDescription = "Ungroup items",
-                            tint = MaterialTheme.colors.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -195,20 +198,20 @@ fun TrackedGroupCard(
             ) {
                 Text(
                     text = if (group.name.isNotBlank()) group.name else (primaryProduct?.title ?: "Grouped Products"),
-                    style = MaterialTheme.typography.subtitle2.copy(
+                    style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
                         lineHeight = 18.sp
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colors.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // Prominent Least Current Price Box
                 Surface(
-                    color = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -224,28 +227,28 @@ fun TrackedGroupCard(
                                 Icon(
                                     imageVector = Icons.Default.LocalOffer,
                                     contentDescription = "Best Deal",
-                                    tint = MaterialTheme.colors.primary,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "LEAST CURRENT PRICE",
-                                    style = MaterialTheme.typography.caption.copy(
+                                    style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 9.sp,
                                         letterSpacing = 0.5.sp,
                                         fontWeight = FontWeight.Bold
                                     ),
-                                    color = MaterialTheme.colors.primary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
 
                             if (latestTrackedTime > 0L) {
                                 Text(
                                     text = formatRelativeTime(latestTrackedTime),
-                                    style = MaterialTheme.typography.caption.copy(
+                                    style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 9.sp
                                     ),
-                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -259,24 +262,24 @@ fun TrackedGroupCard(
                         ) {
                             Text(
                                 text = formatPrice(leastPrice, bestProduct?.link ?: ""),
-                                style = MaterialTheme.typography.subtitle1.copy(
+                                style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.ExtraBold
                                 ),
-                                color = MaterialTheme.colors.onSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
 
                             if (bestStore.isNotBlank()) {
                                 Surface(
-                                    color = MaterialTheme.colors.primary.copy(alpha = 0.15f),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
                                         text = "Best on $bestStore",
-                                        style = MaterialTheme.typography.caption.copy(
+                                        style = MaterialTheme.typography.labelSmall.copy(
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold
                                         ),
-                                        color = MaterialTheme.colors.primary,
+                                        color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }

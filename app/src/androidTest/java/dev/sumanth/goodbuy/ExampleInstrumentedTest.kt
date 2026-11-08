@@ -4,8 +4,8 @@ import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.material.Colors
-import androidx.compose.material.MaterialTheme
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
@@ -148,22 +148,21 @@ class ExampleInstrumentedTest {
         val configuration = Configuration(context.resources.configuration).apply {
             uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
         }
-        lateinit var colors: Colors
+        lateinit var colorScheme: ColorScheme
 
         composeRule.setContent {
             CompositionLocalProvider(LocalConfiguration provides configuration) {
                 AppTheme {
-                    colors = MaterialTheme.colors
+                    colorScheme = MaterialTheme.colorScheme
                 }
             }
         }
 
         composeRule.runOnIdle {
-            assertTrue(colors.isLight)
-            assertEquals(Color(0xFFAB81FF), colors.primary)
-            assertEquals(Color(0xFF211333), colors.onPrimary)
-            assertEquals(Color(0xFFFAFAFA), colors.background)
-            assertEquals(Color.White, colors.surface)
+            assertEquals(Color(0xFF67548E), colorScheme.primary)
+            assertEquals(Color(0xFFFFFFFF), colorScheme.onPrimary)
+            assertEquals(Color(0xFFFEF7FF), colorScheme.background)
+            assertEquals(Color(0xFFFEF7FF), colorScheme.surface)
         }
     }
 
