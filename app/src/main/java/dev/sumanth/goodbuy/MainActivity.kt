@@ -5,6 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +26,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -56,6 +63,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.sumanth.goodbuy.repository.TrackingRepository
 import dev.sumanth.goodbuy.ui.screens.HomeScreen
+import dev.sumanth.goodbuy.ui.screens.PreferencesScreen
 import dev.sumanth.goodbuy.ui.screens.TrackingScreen
 import dev.sumanth.goodbuy.ui.theme.AppTheme
 import dev.sumanth.goodbuy.ui.viewmodel.HomeViewModel
@@ -85,6 +93,7 @@ fun MainApp(
     trackingViewModel: TrackingViewModel = viewModel()
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var currentScreen by rememberSaveable { mutableStateOf("main") }
     val trackingState by trackingViewModel.uiState.collectAsStateWithLifecycle()
     val trackedProducts = trackingState.trackedProducts
     val trackedGroups = trackingState.trackedGroups
@@ -108,8 +117,6 @@ fun MainApp(
         }
     }
 
-
-
     val totalSelectedCount = trackingState.totalSelectedCount
     val exitSelectionMode = trackingViewModel::exitSelectionMode
 
@@ -117,227 +124,264 @@ fun MainApp(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = MaterialTheme.colorScheme.background,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = {
-                if (selectedTab == 0) {
-                    // Common Top Bar for HomeScreen (Search)
-                    TopAppBar(
-                        title = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Search",
-                                    style = MaterialTheme.typography.titleLarge.copy(
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-                    )
+        AnimatedContent(
+            targetState = currentScreen,
+            transitionSpec = {
+                if (targetState == "preferences") {
+                    (slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }) + fadeIn())
+                        .togetherWith(slideOutHorizontally(targetOffsetX = { fullWidth -> -fullWidth }) + fadeOut())
                 } else {
-                    // Common Top Bar for TrackingScreen
-                    if (isSelectionMode) {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    text = "$totalSelectedCount Selected to Group",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = { exitSelectionMode() }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Cancel selection"
-                                    )
-                                }
-                            },
-                            actions = {
-                                Button(
-                                    onClick = trackingViewModel::groupSelected,
-                                    enabled = totalSelectedCount >= 2,
-                                    modifier = Modifier.padding(end = 8.dp),
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Layers,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Group")
-                                }
-                            }
-                        )
-                    } else {
-                        TopAppBar(
-                            title = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.NotificationsActive,
-                                        contentDescription = "Price Tracker",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Price Tracker",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                }
-                            },
-                            actions = {
-                                if (trackedProducts.isNotEmpty() || trackedGroups.isNotEmpty()) {
-                                    IconButton(onClick = { showClearAllDialog = true }) {
-                                        Icon(
-                                            imageVector = Icons.Default.DeleteOutline,
-                                            contentDescription = "Clear all tracked items",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
-                            }
-                        )
-                    }
+                    (slideInHorizontally(initialOffsetX = { fullWidth -> -fullWidth }) + fadeIn())
+                        .togetherWith(slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }) + fadeOut())
                 }
             },
-            bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ) {
-                    NavigationBarItem(
-                        selected = selectedTab == 0,
-                        onClick = {
-                            if (isSelectionMode) exitSelectionMode()
-                            selectedTab = 0
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search"
-                            )
-                        },
-                        label = { Text("Search") }
-                    )
-
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = {
-                            selectedTab = 1
-                        },
-                        icon = {
-                            BadgedBox(
-                                badge = {
-                                    if (trackedProducts.isNotEmpty()) {
-                                        Badge {
-                                            Text("${trackedProducts.size}")
-                                        }
+            label = "ScreenTransition"
+        ) { screen ->
+            if (screen == "preferences") {
+                PreferencesScreen(
+                    onBackClick = { currentScreen = "main" },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
+                    topBar = {
+                        if (selectedTab == 0) {
+                            // Common Top Bar for HomeScreen (Search)
+                            TopAppBar(
+                                title = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = "Search",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Search",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = { currentScreen = "preferences" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = "Preferences",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
                                     }
                                 }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NotificationsActive,
-                                    contentDescription = "Price Tracker"
+                            )
+                        } else {
+                            // Common Top Bar for TrackingScreen
+                            if (isSelectionMode) {
+                                TopAppBar(
+                                    title = {
+                                        Text(
+                                            text = "$totalSelectedCount Selected to Group",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    },
+                                    navigationIcon = {
+                                        IconButton(onClick = { exitSelectionMode() }) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                contentDescription = "Cancel selection"
+                                            )
+                                        }
+                                    },
+                                    actions = {
+                                        Button(
+                                            onClick = trackingViewModel::groupSelected,
+                                            enabled = totalSelectedCount >= 2,
+                                            modifier = Modifier.padding(end = 8.dp),
+                                            shape = MaterialTheme.shapes.small
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Layers,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Group")
+                                        }
+                                    }
+                                )
+                            } else {
+                                TopAppBar(
+                                    title = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.NotificationsActive,
+                                                contentDescription = "Price Tracker",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(26.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Price Tracker",
+                                                style = MaterialTheme.typography.titleLarge.copy(
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                        }
+                                    },
+                                    actions = {
+                                        if (trackedProducts.isNotEmpty() || trackedGroups.isNotEmpty()) {
+                                            IconButton(onClick = { showClearAllDialog = true }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DeleteOutline,
+                                                    contentDescription = "Clear all tracked items",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                        IconButton(onClick = { currentScreen = "preferences" }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Settings,
+                                                contentDescription = "Preferences",
+                                                tint = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
                                 )
                             }
-                        },
-                        label = { Text("Price Tracker") }
-                    )
-                }
-            }
-        ) { innerPadding ->
-            val pagerState = rememberPagerState(pageCount = { 2 })
-
-            LaunchedEffect(selectedTab) {
-                if (pagerState.currentPage != selectedTab) {
-                    pagerState.animateScrollToPage(selectedTab)
-                }
-            }
-
-            LaunchedEffect(pagerState.currentPage) {
-                if (selectedTab != pagerState.currentPage) {
-                    selectedTab = pagerState.currentPage
-                    if (pagerState.currentPage != 1 && isSelectionMode) {
-                        exitSelectionMode()
-                    }
-                }
-            }
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) { page ->
-                when (page) {
-                    0 -> HomeScreen(
-                        snackbarHostState = snackbarHostState,
-                        homeViewModel = homeViewModel,
-                        gridState = homeGridState,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    1 -> TrackingScreen(
-                        trackingViewModel = trackingViewModel,
-                        snackbarHostState = snackbarHostState,
-                        onNavigateToSearch = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(0)
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
-            // Clear All Confirmation Dialog
-            if (showClearAllDialog) {
-                AlertDialog(
-                    onDismissRequest = { showClearAllDialog = false },
-                    title = {
-                        Text(
-                            text = "Clear All Tracked Products?",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        }
                     },
-                    text = {
-                        Text(
-                            text = "Are you sure you want to remove all products and groups from price tracking? This action cannot be undone.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showClearAllDialog = false
-                                trackingViewModel.clearAll()
-                            }
+                    bottomBar = {
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ) {
-                            Text(
-                                text = "Clear All",
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold
+                            NavigationBarItem(
+                                selected = selectedTab == 0,
+                                onClick = {
+                                    if (isSelectionMode) exitSelectionMode()
+                                    selectedTab = 0
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = "Search"
+                                    )
+                                },
+                                label = { Text("Search") }
+                            )
+
+                            NavigationBarItem(
+                                selected = selectedTab == 1,
+                                onClick = {
+                                    selectedTab = 1
+                                },
+                                icon = {
+                                    BadgedBox(
+                                        badge = {
+                                            if (trackedProducts.isNotEmpty()) {
+                                                Badge {
+                                                    Text("${trackedProducts.size}")
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.NotificationsActive,
+                                            contentDescription = "Price Tracker"
+                                        )
+                                    }
+                                },
+                                label = { Text("Price Tracker") }
                             )
                         }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showClearAllDialog = false }) {
-                            Text("Cancel")
+                    }
+                ) { innerPadding ->
+                    val pagerState = rememberPagerState(pageCount = { 2 })
+
+                    LaunchedEffect(selectedTab) {
+                        if (pagerState.currentPage != selectedTab) {
+                            pagerState.animateScrollToPage(selectedTab)
                         }
                     }
-                )
+
+                    LaunchedEffect(pagerState.currentPage) {
+                        if (selectedTab != pagerState.currentPage) {
+                            selectedTab = pagerState.currentPage
+                            if (pagerState.currentPage != 1 && isSelectionMode) {
+                                exitSelectionMode()
+                            }
+                        }
+                    }
+
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) { page ->
+                        when (page) {
+                            0 -> HomeScreen(
+                                snackbarHostState = snackbarHostState,
+                                homeViewModel = homeViewModel,
+                                gridState = homeGridState,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            1 -> TrackingScreen(
+                                trackingViewModel = trackingViewModel,
+                                snackbarHostState = snackbarHostState,
+                                onNavigateToSearch = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(0)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+
+                    // Clear All Confirmation Dialog
+                    if (showClearAllDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showClearAllDialog = false },
+                            title = {
+                                Text(
+                                    text = "Clear All Tracked Products?",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = "Are you sure you want to remove all products and groups from price tracking? This action cannot be undone.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        showClearAllDialog = false
+                                        trackingViewModel.clearAll()
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Clear All",
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showClearAllDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
     }

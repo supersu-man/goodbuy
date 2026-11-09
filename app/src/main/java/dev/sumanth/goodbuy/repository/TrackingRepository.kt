@@ -46,14 +46,15 @@ object TrackingRepository {
     fun init(context: Context) {
         val appContext = context.applicationContext
         appContextRef = appContext
+        dev.sumanth.goodbuy.util.PreferencesManager.init(appContext)
         if (database != null) {
-            schedulePriceCheck(appContext)
+            dev.sumanth.goodbuy.util.PreferencesManager.schedulePriceCheckIfEnabled(appContext)
             return
         }
         val db = AppDatabase.getDatabase(appContext)
         database = db
 
-        schedulePriceCheck(appContext)
+        dev.sumanth.goodbuy.util.PreferencesManager.schedulePriceCheckIfEnabled(appContext)
 
         scope.launch {
             db.productDao().getTrackedProducts().collect { _trackedProducts.value = it.map { e -> e.toDomainModel() } }
@@ -61,24 +62,6 @@ object TrackingRepository {
         scope.launch {
             db.groupDao().getTrackedGroups().collect { _trackedGroups.value = it.map { e -> e.toDomainModel() } }
         }
-    }
-
-    private fun schedulePriceCheck(context: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val periodicRequest = PeriodicWorkRequestBuilder<PriceCheckWorker>(
-            30, TimeUnit.MINUTES
-        )
-            .setConstraints(constraints)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "GoodBuyPriceCheckWork",
-            ExistingPeriodicWorkPolicy.KEEP,
-            periodicRequest
-        )
     }
 
     fun isTracked(productId: String): Boolean = _trackedProducts.value.any { it.id == productId }
