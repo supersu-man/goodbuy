@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.sumanth.goodbuy.ui.components.TrackedGroupCard
@@ -436,7 +437,10 @@ fun TrackingScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 AsyncImage(
-                                    model = item.imageUrl,
+                                    model = ImageRequest.Builder(context)
+                                        .data(item.imageUrl)
+                                        .crossfade(true)
+                                        .build(),
                                     contentDescription = item.title,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier

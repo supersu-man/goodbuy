@@ -46,7 +46,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,7 +91,6 @@ fun MainApp(
     homeViewModel: HomeViewModel = viewModel(),
     trackingViewModel: TrackingViewModel = viewModel()
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var currentScreen by rememberSaveable { mutableStateOf("main") }
     val trackingState by trackingViewModel.uiState.collectAsStateWithLifecycle()
     val trackedProducts = trackingState.trackedProducts
@@ -105,6 +103,15 @@ fun MainApp(
     val scope = rememberCoroutineScope()
     val homeGridState = rememberLazyGridState()
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    val pagerState = rememberPagerState(pageCount = { 2 })
+
+    // Exit selection mode when swiping away from Price Tracker tab
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != 1 && isSelectionMode) {
+            trackingViewModel.exitSelectionMode()
+        }
+    }
 
     LaunchedEffect(homeViewModel, trackingViewModel, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -148,7 +155,7 @@ fun MainApp(
                     containerColor = MaterialTheme.colorScheme.background,
                     snackbarHost = { SnackbarHost(snackbarHostState) },
                     topBar = {
-                        if (selectedTab == 0) {
+                        if (pagerState.currentPage == 0) {
                             // Common Top Bar for HomeScreen (Search)
                             TopAppBar(
                                 title = {
@@ -261,10 +268,14 @@ fun MainApp(
                             contentColor = MaterialTheme.colorScheme.onSurface
                         ) {
                             NavigationBarItem(
-                                selected = selectedTab == 0,
+                                selected = pagerState.currentPage == 0,
                                 onClick = {
-                                    if (isSelectionMode) exitSelectionMode()
-                                    selectedTab = 0
+                                    if (pagerState.currentPage != 0) {
+                                        if (isSelectionMode) exitSelectionMode()
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(0)
+                                        }
+                                    }
                                 },
                                 icon = {
                                     Icon(
@@ -276,9 +287,13 @@ fun MainApp(
                             )
 
                             NavigationBarItem(
-                                selected = selectedTab == 1,
+                                selected = pagerState.currentPage == 1,
                                 onClick = {
-                                    selectedTab = 1
+                                    if (pagerState.currentPage != 1) {
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(1)
+                                        }
+                                    }
                                 },
                                 icon = {
                                     BadgedBox(
@@ -301,23 +316,6 @@ fun MainApp(
                         }
                     }
                 ) { innerPadding ->
-                    val pagerState = rememberPagerState(pageCount = { 2 })
-
-                    LaunchedEffect(selectedTab) {
-                        if (pagerState.currentPage != selectedTab) {
-                            pagerState.animateScrollToPage(selectedTab)
-                        }
-                    }
-
-                    LaunchedEffect(pagerState.currentPage) {
-                        if (selectedTab != pagerState.currentPage) {
-                            selectedTab = pagerState.currentPage
-                            if (pagerState.currentPage != 1 && isSelectionMode) {
-                                exitSelectionMode()
-                            }
-                        }
-                    }
-
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
