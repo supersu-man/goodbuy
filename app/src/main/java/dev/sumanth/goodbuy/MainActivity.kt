@@ -5,12 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,13 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -34,7 +29,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -42,13 +36,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,6 +93,7 @@ fun MainApp(
     var showClearAllDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val homeGridState = rememberLazyGridState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -139,25 +134,20 @@ fun MainApp(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.ShoppingBag,
-                                    contentDescription = "GoodBuy Logo",
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier.size(26.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "GoodBuy",
+                                    text = "Search",
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         fontWeight = FontWeight.Bold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            titleContentColor = MaterialTheme.colorScheme.onSurface
-                        )
+                        }
                     )
                 } else {
                     // Common Top Bar for TrackingScreen
@@ -193,13 +183,7 @@ fun MainApp(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Group")
                                 }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                                actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                            )
+                            }
                         )
                     } else {
                         TopAppBar(
@@ -230,12 +214,7 @@ fun MainApp(
                                         )
                                     }
                                 }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                titleContentColor = MaterialTheme.colorScheme.onSurface,
-                                actionIconContentColor = MaterialTheme.colorScheme.onSurface
-                            )
+                            }
                         )
                     }
                 }
@@ -257,14 +236,7 @@ fun MainApp(
                                 contentDescription = "Search"
                             )
                         },
-                        label = { Text("Search") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                        )
+                        label = { Text("Search") }
                     )
 
                     NavigationBarItem(
@@ -288,37 +260,35 @@ fun MainApp(
                                 )
                             }
                         },
-                        label = { Text("Price Tracker") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                        )
+                        label = { Text("Price Tracker") }
                     )
                 }
             }
         ) { innerPadding ->
-            AnimatedContent(
-                targetState = selectedTab,
-                transitionSpec = {
-                    if (targetState > initialState) {
-                        (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
-                            slideOutHorizontally { width -> -width } + fadeOut()
-                        )
-                    } else {
-                        (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
-                            slideOutHorizontally { width -> width } + fadeOut()
-                        )
+            val pagerState = rememberPagerState(pageCount = { 2 })
+
+            LaunchedEffect(selectedTab) {
+                if (pagerState.currentPage != selectedTab) {
+                    pagerState.animateScrollToPage(selectedTab)
+                }
+            }
+
+            LaunchedEffect(pagerState.currentPage) {
+                if (selectedTab != pagerState.currentPage) {
+                    selectedTab = pagerState.currentPage
+                    if (pagerState.currentPage != 1 && isSelectionMode) {
+                        exitSelectionMode()
                     }
-                },
-                label = "ScreenTransition",
+                }
+            }
+
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-            ) { tab ->
-                when (tab) {
+            ) { page ->
+                when (page) {
                     0 -> HomeScreen(
                         snackbarHostState = snackbarHostState,
                         homeViewModel = homeViewModel,
@@ -328,7 +298,11 @@ fun MainApp(
                     1 -> TrackingScreen(
                         trackingViewModel = trackingViewModel,
                         snackbarHostState = snackbarHostState,
-                        onNavigateToSearch = { selectedTab = 0 },
+                        onNavigateToSearch = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(0)
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
