@@ -108,13 +108,7 @@ fun MainApp(
         }
     }
 
-    LaunchedEffect(selectedTab, trackingViewModel, lifecycleOwner) {
-        if (selectedTab == 1) {
-            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                trackingViewModel.monitorPrices()
-            }
-        }
-    }
+
 
     val totalSelectedCount = trackingState.totalSelectedCount
     val exitSelectionMode = trackingViewModel::exitSelectionMode

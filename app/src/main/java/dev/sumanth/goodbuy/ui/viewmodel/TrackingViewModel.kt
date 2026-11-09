@@ -8,15 +8,12 @@ import dev.sumanth.goodbuy.repository.TrackingRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class TrackingUiState(
@@ -67,12 +64,7 @@ class TrackingViewModel(
     val messages = messageChannel.receiveAsFlow()
     private var refreshJob: Job? = null
 
-    suspend fun monitorPrices() {
-        while (currentCoroutineContext().isActive) {
-            refreshPrices(force = false)
-            delay(60_000L)
-        }
-    }
+
 
     fun refreshPrices(force: Boolean = true) {
         if (refreshJob?.isActive == true) return
