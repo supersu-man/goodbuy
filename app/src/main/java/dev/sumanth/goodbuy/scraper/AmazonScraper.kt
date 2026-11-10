@@ -41,12 +41,14 @@ object AmazonScraper {
             headers.forEach { (key, value) -> requestBuilder.header(key, value) }
 
             try {
-                val html = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                    response.body?.string() ?: ""
+                val (html, isBlocked) = ScraperUtils.httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                    val bodyText = response.body?.string() ?: ""
+                    val blocked = response.code == 403 || response.code == 429 || response.code == 503
+                    Pair(bodyText, blocked)
                 }
 
                 if (html.isNotEmpty()) {
-                    if (html.contains("validateCaptcha", ignoreCase = true) || html.contains("Robot Check", ignoreCase = true)) {
+                    if (isBlocked || html.contains("validateCaptcha", ignoreCase = true) || html.contains("Robot Check", ignoreCase = true)) {
                         break
                     }
 
@@ -152,7 +154,7 @@ object AmazonScraper {
             if (el.hasClass("s-widget-spacing-small") && el.select("h2").isEmpty()) continue
 
             // 1. Title & Brand
-            val titleEl = el.selectFirst("h2 span, h2 a span")
+            val titleEl = el.selectFirst("h2 span, h2 a span, span.a-size-medium, span.a-size-base-plus, div.s-title-instructions-style span")
             val title = titleEl?.text()?.trim() ?: ""
             if (title.isBlank()) continue
 
@@ -163,8 +165,8 @@ object AmazonScraper {
             }
 
             // 2. Prices
-            val priceRaw = el.selectFirst(".a-price:not(.a-text-price) span.a-offscreen")?.text() ?: ""
-            val mrpRaw = el.selectFirst(".a-price.a-text-price span.a-offscreen")?.text() ?: ""
+            val priceRaw = el.selectFirst(".a-price:not(.a-text-price) span.a-offscreen, span.a-price-whole, span.a-price span.a-offscreen")?.text() ?: ""
+            val mrpRaw = el.selectFirst(".a-price.a-text-price span.a-offscreen, span.a-text-price")?.text() ?: ""
 
             val price = ScraperUtils.parsePrice(priceRaw)
             val mrp = ScraperUtils.parsePrice(mrpRaw).let { if (it > 0.0) it else price }

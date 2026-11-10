@@ -172,7 +172,7 @@ fun ProductCard(
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = product.rating.toString(),
+                        text = formatRating(product.rating),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -244,6 +244,11 @@ fun ProductCard(
             }
         }
     }
+}
+
+fun formatRating(rating: Double): String {
+    val df = java.text.DecimalFormat("#.##", java.text.DecimalFormatSymbols(Locale.US))
+    return df.format(rating)
 }
 
 fun formatPrice(price: Double, link: String = ""): String {

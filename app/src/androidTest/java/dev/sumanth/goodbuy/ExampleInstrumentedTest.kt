@@ -110,7 +110,6 @@ class ExampleInstrumentedTest {
         composeRule.onNodeWithText("headphones").assertExists()
         composeRule.onNode(amazonFilter).assertIsSelected()
         composeRule.onNodeWithText("30 of 30 Products").assertExists()
-        composeRule.onNodeWithText("Flipkart, Amazon & Myntra Live").assertExists()
         composeRule.runOnIdle {
             assertEquals(scrollIndex, gridState.firstVisibleItemIndex)
             assertEquals(scrollOffset, gridState.firstVisibleItemScrollOffset)
